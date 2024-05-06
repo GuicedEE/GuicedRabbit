@@ -11,6 +11,9 @@ import lombok.extern.java.Log;
 
 import java.util.concurrent.TimeUnit;
 
+import static com.guicedee.rabbit.QueuePublisher.done;
+
+
 @Log
 @Singleton
 public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
@@ -27,31 +30,39 @@ public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
     {
         if (publisher == null)
         {
-            if(!client.isConnected())
-            client.addConnectionEstablishedCallback((est) -> {
-                publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
-            });
-            else {
+            if (done.isDone())
+            {
                 publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
             }
-            if(publisher == null)
-                for (int i = 0; i < 5; i++)
-                {
-                    try
+            else
+            {
+                done.thenRun(() -> {
+                    if (!client.isConnected())
                     {
-                        TimeUnit.SECONDS.sleep(1);
-                        if (publisher != null)
-                        {
-                            break;
-                        }
+                        client.addConnectionEstablishedCallback((est) -> {
+                            publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
+                        });
                     }
-                    catch (InterruptedException e)
+                    else
                     {
-                        throw new RuntimeException(e);
+                        publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
+
                     }
-                }
+                });
+            }
         }
-        //request class and inject
+        while (publisher == null)
+        {
+            try
+            {
+                TimeUnit.MILLISECONDS.sleep(100);
+            }
+            catch (InterruptedException e)
+            {
+                throw new RuntimeException(e);
+            }
+
+        }
         return publisher;
     }
 

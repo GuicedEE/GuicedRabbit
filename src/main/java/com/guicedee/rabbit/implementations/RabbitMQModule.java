@@ -13,7 +13,6 @@ import io.github.classgraph.ScanResult;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQOptions;
 import io.vertx.rabbitmq.RabbitMQPublisher;
-import jakarta.inject.Singleton;
 
 @QueueExchange
 public class RabbitMQModule extends AbstractModule implements IGuiceModule<RabbitMQModule>
@@ -40,8 +39,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             bind(Key.get(RabbitMQClient.class, Names.named(connectionOption.value()))).toProvider(clientProvider);
         }
         //also per connection name
-        bind(RabbitMQPublisher.class).toProvider(RabbitMQPublisherProvider.class)
-                                     .in(Singleton.class);
+        bind(RabbitMQPublisher.class).toProvider(RabbitMQPublisherProvider.class);
 
         ClassInfoList queues = scanResult.getClassesWithAnnotation(QueueDefinition.class);
         ClassInfoList exchangeAnnotations = scanResult.getClassesWithAnnotation(QueueExchange.class);

@@ -13,6 +13,12 @@ class RabbitPostStartupTest
     @Named(value = "test-queue-consumer")
     private QueuePublisher queuePublisher;
 
+    @Inject
+    @Named(value = "single-consumer-test")
+    private QueuePublisher singleConsumer;
+
+
+
     public static void main(String[] args)
     {
         new RabbitPostStartupTest().configure();
@@ -32,6 +38,8 @@ class RabbitPostStartupTest
         System.out.println("test");
         test.queuePublisher.publish("Test");
         System.out.println("sent");
+        test.singleConsumer.publish("Tester");
+        System.out.println("sent 2");
 
     }
 }

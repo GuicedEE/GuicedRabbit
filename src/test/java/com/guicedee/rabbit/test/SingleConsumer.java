@@ -11,6 +11,6 @@ public class SingleConsumer implements QueueConsumer
     @Override
     public void consume(RabbitMQMessage message)
     {
-        System.out.println("Single consumer got - " + message);
+        System.out.println("Single consumer got - " + message.body());
     }
 }

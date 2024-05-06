@@ -10,9 +10,11 @@ import io.vertx.rabbitmq.RabbitMQConsumer;
 import jakarta.inject.Singleton;
 import lombok.extern.java.Log;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
-import static com.guicedee.rabbit.implementations.RabbitMQClientProvider.startQueueFuture;
+import static com.guicedee.rabbit.QueuePublisher.done;
 import static com.guicedee.rabbit.implementations.RabbitPostStartup.toOptions;
 
 @Log
@@ -27,6 +29,9 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
 
     private QueueConsumer queueConsumer = null;
     private RabbitMQConsumer consumer = null;
+    private AtomicBoolean created = new AtomicBoolean(false);
+
+    CompletableFuture exchangeFuture = null;
 
     @SuppressWarnings("unchecked")
     public RabbitMQConsumerProvider(QueueDefinition queueDefinition, Class clazz)
@@ -38,13 +43,16 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
     @Override
     public QueueConsumer get()
     {
-        startQueueFuture.andThen(a -> {
+        done.thenRun(() -> {
             if (queueConsumer == null || consumer.isCancelled())
             {
                 if (!client.isConnected())
                 {
                     client.addConnectionEstablishedCallback((connectionEstablished) -> {
-                        createConsumer();
+                        if (queueConsumer != null)
+                        {
+                            createConsumer();
+                        }
                     });
                 }
                 else
@@ -53,63 +61,55 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
                 }
             }
         });
-      /*  if(queueConsumer == null)
-            for (int i = 0; i < 5; i++)
-            {
-                try
-                {
-                    TimeUnit.SECONDS.sleep(1);
-                    if (queueConsumer != null)
-                    {
-                        break;
-                    }
-                }
-                catch (InterruptedException e)
-                {
-                    throw new RuntimeException(e);
-                }
-            }*/
-        //request class and inject
         return queueConsumer;
     }
 
     private void createConsumer()
     {
 
-        client.basicConsumer(queueDefinition.value(), toOptions(this.queueDefinition.options()), (event) -> {
-            if (event.succeeded())
-            {
-                consumer = event.result();
-                consumer.setQueueName(queueDefinition.value());
-                consumer = consumer.fetch(queueDefinition.options()
-                                                         .fetchCount());
-                try
+        if (!created.get())
+        {
+            created.set(true);
+            client.basicConsumer(queueDefinition.value(), toOptions(this.queueDefinition.options()), (event) -> {
+                if (event.succeeded())
                 {
-                    queueConsumer = clazz.newInstance();
-                    IGuiceContext.instance()
-                                 .inject()
-                                 .injectMembers(queueConsumer);
-                }
-                catch (InstantiationException | IllegalAccessException e)
-                {
-                    throw new RuntimeException(e);
-                }
-                consumer.handler((message) -> {
+                    consumer = event.result();
+                    consumer.setQueueName(queueDefinition.value());
+                    consumer = consumer.fetch(queueDefinition.options()
+                                                             .fetchCount());
+                    queueConsumer = IGuiceContext.get(clazz);
                     try
                     {
-                        queueConsumer.consume(message);
+                        if (queueConsumer == null)
+                        {
+                            queueConsumer = clazz.newInstance();
+                            IGuiceContext.instance()
+                                         .inject()
+                                         .injectMembers(queueConsumer);
+                        }
                     }
-                    catch (Throwable e)
+                    catch (InstantiationException | IllegalAccessException e)
                     {
                         throw new RuntimeException(e);
                     }
-                });
-            }
-            else
-            {
-                log.log(Level.SEVERE, "Could not bind rabbit mq consumer on queue [" + queueDefinition.value() + "]", event.cause());
-            }
-        });
+                    consumer.handler((message) -> {
+                        try
+                        {
+                            queueConsumer.consume(message);
+                        }
+                        catch (Throwable e)
+                        {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+                else
+                {
+                    log.log(Level.SEVERE, "Could not bind rabbit mq consumer on queue [" + queueDefinition.value() + "]", event.cause());
+                    created.set(false);
+                }
+            });
+        }
     }
 
     public void pause()

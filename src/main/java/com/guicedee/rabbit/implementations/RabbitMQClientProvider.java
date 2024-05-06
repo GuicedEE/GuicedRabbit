@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
+import static com.guicedee.rabbit.QueuePublisher.done;
+
 @Singleton
 @Log
 public class RabbitMQClientProvider extends AbstractVerticle implements Provider<RabbitMQClient>
@@ -32,7 +34,6 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
 
     private final RabbitMQOptions options;
     public static Future<Void> startQueueFuture;
-
     public RabbitMQClientProvider(RabbitMQOptions options)
     {
         this.options = options;
@@ -85,66 +86,78 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
         ClassInfoList queueConsumers = scanResult
                 .getClassesWithAnnotation(QueueDefinition.class);
         ClassInfoList exchangeAnnotations = scanResult.getClassesWithAnnotation(QueueExchange.class);
-
+        if(!rabbitMQClient.isConnected())
         rabbitMQClient.addConnectionEstablishedCallback(promise -> {
-
-            for (ClassInfo exchanges : exchangeAnnotations)
-            {
-                QueueExchange queueExchange = exchanges.loadClass()
-                                                       .getAnnotation(QueueExchange.class);
-                String exchangeName = queueExchange.value();
-                String deadLetter = exchangeName + ".deadletter";
-                if (queueExchange.createDeadLetter())
-                {
-                    JsonObject config = new JsonObject();
-                    config.put("x-dead-letter-exchange", deadLetter);
-                    //declare dead letter
-                    rabbitMQClient.exchangeDeclare(deadLetter, queueExchange.exchangeType()
-                                                                            .toString(), queueExchange.durable(), queueExchange.autoDelete(), onResult -> {
-                        if (onResult.succeeded())
-                        {
-                            log.config("Dead Letter Exchange successfully declared ");
-                            config.put("alternate-exchange", exchangeName);
-                            rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
-                                                                                      .toString(), queueExchange.durable(),
-                                                           queueExchange.autoDelete(),
-                                                           config,
-                                                           exchangeDeclared -> {
-                                                               if (exchangeDeclared.succeeded())
-                                                               {
-                                                                   log.info("Exchange successfully declared with Dead Letter Exchange");
-                                                                   createQueue(rabbitMQClient, queueConsumers, exchangeName);
-                                                               }
-                                                               else
-                                                               {
-                                                                   log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
-                                                               }
-                                                           });
-                        }
-                        else
-                        {
-                            log.log(Level.SEVERE, "Cannot create dead letter queue", onResult.cause());
-                        }
-                    });
-                }
-                else
-                {
-                    rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
-                                                                              .toString(), queueExchange.durable(), queueExchange.autoDelete(), onResult -> {
-                        if (onResult.succeeded())
-                        {
-                            log.info("Exchange successfully declared with config");
-                            createQueue(rabbitMQClient, queueConsumers, exchangeName);
-                        }
-                        else
-                        {
-                            log.log(Level.SEVERE, "Cannot create exchange ", onResult.cause());
-                        }
-                    });
-                }
-
-            }
+            processNewConnection(rabbitMQClient, exchangeAnnotations, queueConsumers);
         });
+        else{
+            processNewConnection(rabbitMQClient, exchangeAnnotations, queueConsumers);
+        }
+    }
+
+    private static void processNewConnection(RabbitMQClient rabbitMQClient, ClassInfoList exchangeAnnotations, ClassInfoList queueConsumers)
+    {
+        for (ClassInfo exchanges : exchangeAnnotations)
+        {
+            QueueExchange queueExchange = exchanges.loadClass()
+                                                   .getAnnotation(QueueExchange.class);
+            String exchangeName = queueExchange.value();
+            String deadLetter = exchangeName + ".deadletter";
+            if (queueExchange.createDeadLetter())
+            {
+                JsonObject config = new JsonObject();
+                config.put("x-dead-letter-exchange", deadLetter);
+                //declare dead letter
+                rabbitMQClient.exchangeDeclare(deadLetter, queueExchange.exchangeType()
+                                                                        .toString(), queueExchange.durable(), queueExchange.autoDelete(), onResult -> {
+                    if (onResult.succeeded())
+                    {
+                        log.config("Dead Letter Exchange successfully declared ");
+                        config.put("alternate-exchange", exchangeName);
+                        rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
+                                                                                  .toString(), queueExchange.durable(),
+                                                       queueExchange.autoDelete(),
+                                                       config,
+                                                       exchangeDeclared -> {
+                                                           if (exchangeDeclared.succeeded())
+                                                           {
+                                                               log.info("Exchange successfully declared with Dead Letter Exchange");
+                                                               done.completeAsync(() -> {
+                                                                   createQueue(rabbitMQClient, queueConsumers, exchangeName);
+                                                                   return null;
+                                                               });
+                                                           }
+                                                           else
+                                                           {
+                                                               log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
+                                                           }
+                                                       });
+                    }
+                    else
+                    {
+                        log.log(Level.SEVERE, "Cannot create dead letter queue", onResult.cause());
+                    }
+                });
+            }
+            else
+            {
+                rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
+                                                                          .toString(), queueExchange.durable(), queueExchange.autoDelete(), exchangeDeclared -> {
+                    if (exchangeDeclared.succeeded())
+                    {
+                        log.info("Exchange successfully declared with config");
+                        done.completeAsync(() -> {
+                            createQueue(rabbitMQClient, queueConsumers, exchangeName);
+                            return null;
+                        });
+                    }
+                    else
+                    {
+                        log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
+                    }
+                });
+            }
+        }
     }
 
     private static void createQueue(RabbitMQClient rabbitMQClient, ClassInfoList queueConsumers, String exchangeName)
