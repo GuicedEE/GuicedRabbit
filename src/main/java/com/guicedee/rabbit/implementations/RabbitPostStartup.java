@@ -1,5 +1,6 @@
 package com.guicedee.rabbit.implementations;
 
+import com.google.inject.Inject;
 import com.google.inject.Key;
 import com.google.inject.name.Names;
 import com.guicedee.client.IGuiceContext;
@@ -7,14 +8,19 @@ import com.guicedee.guicedinjection.interfaces.IGuicePostStartup;
 import com.guicedee.rabbit.QueueConsumer;
 import com.guicedee.rabbit.QueueDefinition;
 import com.guicedee.rabbit.QueueOptions;
+import com.guicedee.rabbit.QueuePublisher;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
+import io.vertx.rabbitmq.RabbitMQClient;
 import lombok.extern.java.Log;
 
 @Log
 public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
 {
+    @Inject
+    RabbitMQClient client;
+
     @Override
     public void postLoad()
     {
@@ -27,11 +33,11 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
             Class<QueueConsumer> aClass = (Class<QueueConsumer>) clazz;
             QueueDefinition queueDefinition = aClass.getAnnotation(QueueDefinition.class);
             log.config("Starting Queue Consumer - " + queueDefinition.value());
+            Key<QueuePublisher> queuePublisherKey = Key.get(QueuePublisher.class, Names.named(queueDefinition.value()));
+            QueuePublisher queuePublisher = IGuiceContext.get(queuePublisherKey);
             QueueConsumer queueConsumer = IGuiceContext.get(Key.get(QueueConsumer.class, Names.named(queueDefinition.value())));
             log.config("Started Queue Consumer - " + queueConsumer);
         }
-
-
     }
 
     public static io.vertx.rabbitmq.QueueOptions toOptions(QueueOptions options)

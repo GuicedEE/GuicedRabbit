@@ -10,7 +10,6 @@ import io.vertx.rabbitmq.RabbitMQConsumer;
 import jakarta.inject.Singleton;
 import lombok.extern.java.Log;
 
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import static com.guicedee.rabbit.implementations.RabbitMQClientProvider.startQueueFuture;
@@ -54,7 +53,7 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
                 }
             }
         });
-        if(queueConsumer == null)
+      /*  if(queueConsumer == null)
             for (int i = 0; i < 5; i++)
             {
                 try
@@ -69,13 +68,14 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
                 {
                     throw new RuntimeException(e);
                 }
-            }
+            }*/
         //request class and inject
         return queueConsumer;
     }
 
     private void createConsumer()
     {
+
         client.basicConsumer(queueDefinition.value(), toOptions(this.queueDefinition.options()), (event) -> {
             if (event.succeeded())
             {
@@ -110,6 +110,15 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
                 log.log(Level.SEVERE, "Could not bind rabbit mq consumer on queue [" + queueDefinition.value() + "]", event.cause());
             }
         });
+    }
 
+    public void pause()
+    {
+        consumer.pause();
+    }
+
+    public void resume()
+    {
+        consumer.resume();
     }
 }

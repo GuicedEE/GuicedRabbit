@@ -38,4 +38,13 @@ public class QueuePublisher
         }
         rabbitMQPublisher.publish(exchangeName, routingKey, properties.build(), Buffer.buffer(body));
     }
+
+    public void pause()
+    {
+        rabbitMQPublisher.stop();
+    }
+    public void resume()
+    {
+        rabbitMQPublisher.start();
+    }
 }
