@@ -6,7 +6,6 @@ import com.guicedee.rabbit.RabbitConnectionOptions;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.rabbitmq.RabbitMQMessage;
 import jakarta.inject.Singleton;
-import lombok.NoArgsConstructor;
 
 @RabbitConnectionOptions(value = "connection-1",
                          password = "guest",
@@ -14,7 +13,6 @@ import lombok.NoArgsConstructor;
                          reconnectAttempts = 10,
                          reconnectInterval = 500)
 @QueueDefinition(value = "test-queue-consumer")
-@NoArgsConstructor
 @Singleton
 public class RConsumer implements QueueConsumer
 {
