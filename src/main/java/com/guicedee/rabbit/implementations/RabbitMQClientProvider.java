@@ -16,10 +16,14 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQOptions;
 import jakarta.inject.Singleton;
+import lombok.Getter;
 import lombok.extern.java.Log;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -34,6 +38,13 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
 
     private final RabbitMQOptions options;
     public static Future<Void> startQueueFuture;
+
+    public static CompletableFuture<Void> rabbitMQClientStarted = new CompletableFuture<>().newIncompleteFuture();
+    public static List<CompletableFuture<Void>> queueBindingFutures = new ArrayList<>();
+
+    @Getter
+    private static RabbitMQClient client;
+
     public RabbitMQClientProvider(RabbitMQOptions options)
     {
         this.options = options;
@@ -56,7 +67,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
     @Override
     public RabbitMQClient get()
     {
-        RabbitMQClient client = RabbitMQClient.create(vertx, options);
+        client = RabbitMQClient.create(vertx, options);
         startQueueFuture = client.start();
         startQueueFuture.andThen((result) -> handle(client, result));
         while(!startQueueFuture.isComplete())
@@ -125,7 +136,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                                done.completeAsync(() -> {
                                                                    createQueue(rabbitMQClient, queueConsumers, exchangeName);
                                                                    return null;
-                                                               });
+                                                               }).thenRun(()->rabbitMQClientStarted.complete(null));
                                                            }
                                                            else
                                                            {
@@ -196,6 +207,8 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                 String routingKey = exchangeName + "_" + queueDefinition.value();
                                                 Map<String, Object> arguments = new HashMap<>();
 
+                                                CompletableFuture<Void> completableFuture = new CompletableFuture<>().newIncompleteFuture();
+                                                queueBindingFutures.add(completableFuture);
                                                 //then bind the queue
                                                 rabbitMQClient.queueBind(queueDefinition.value(), exchangeName, routingKey, arguments, onResult -> {
                                                     if (onResult.succeeded())
@@ -206,6 +219,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                     {
                                                         log.log(Level.SEVERE, "Cannot bind queue ", onResult.cause());
                                                     }
+                                                    completableFuture.complete(null);
                                                 });
                                             }
                                         }

@@ -9,10 +9,17 @@ import com.guicedee.guicedinjection.interfaces.IGuiceModule;
 import com.guicedee.rabbit.*;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
+import io.github.classgraph.FieldInfo;
 import io.github.classgraph.ScanResult;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQOptions;
 import io.vertx.rabbitmq.RabbitMQPublisher;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+
+import java.lang.reflect.Field;
+import java.util.HashSet;
+import java.util.Set;
 
 @QueueExchange
 public class RabbitMQModule extends AbstractModule implements IGuiceModule<RabbitMQModule>
@@ -44,19 +51,20 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
         ClassInfoList queues = scanResult.getClassesWithAnnotation(QueueDefinition.class);
         ClassInfoList exchangeAnnotations = scanResult.getClassesWithAnnotation(QueueExchange.class);
 
+        String queueExchangeName = "default";
+        Set<String> routingKeysUsed = new HashSet<>();
         //bind the queues with their names to a RabbitMQConsumer
         for (ClassInfo queueClassInfo : queues)
         {
             Class<?> clazz = queueClassInfo.loadClass();
             Class<QueueConsumer> aClass = (Class<QueueConsumer>) clazz;
             QueueDefinition queueDefinition = aClass.getAnnotation(QueueDefinition.class);
-            String queueExchangeName = "default";
             if (queueDefinition.exchange()
                                .equals("default") || exchangeAnnotations.size() == 1)
             {
                 QueueExchange annotation = exchangeAnnotations.stream()
                                                               .findFirst()
-                                                              .orElseThrow()
+                                                              .orElseThrow(() -> new RuntimeException("No @QueueExchange Declared for Connection - " + queueDefinition.value()))
                                                               .loadClass()
                                                               .getAnnotation(QueueExchange.class);
                 queueExchangeName = annotation.value();
@@ -66,18 +74,61 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             if (queueDefinition.options()
                                .singleConsumer())
             {
-                bind(Key.get(aClass)).toProvider(provider);
+                bind(Key.get(aClass)).toProvider(provider).asEagerSingleton();
                 bind(Key.get(QueueConsumer.class, Names.named(queueDefinition.value()))).to(Key.get(aClass));
             }
             else
             {
-                bind(Key.get(aClass)).toProvider(provider);
+                bind(Key.get(aClass)).toProvider(provider).asEagerSingleton();
                 bind(Key.get(QueueConsumer.class, Names.named(queueDefinition.value()))).to(Key.get(aClass));
             }
 
             String routingKey = queueExchangeName + "_" + queueDefinition.value();
-            bind(Key.get(QueuePublisher.class, Names.named(queueDefinition.value())))
-                    .toProvider(new RabbitMQQueuePublisherProvider(queueDefinition, queueExchangeName, routingKey));
+            if (!routingKeysUsed.contains(routingKey))
+            {
+                routingKeysUsed.add(routingKey);
+                bind(Key.get(QueuePublisher.class, Names.named(queueDefinition.value())))
+                        .toProvider(new RabbitMQQueuePublisherProvider(queueDefinition, queueExchangeName, routingKey));
+            }
+        }
+
+        Set<String> boundKeys = new HashSet<>();
+        for (ClassInfo classThatMay : scanResult.getAllClasses())
+        {
+            Class<?> aClass = classThatMay.loadClass(true);
+            for (FieldInfo fieldInfo : classThatMay.getFieldInfo())
+            {
+                if(!fieldInfo.isFinal() && !fieldInfo.isStatic())
+                {
+                    try
+                    {
+                        Field declaredField = aClass.getDeclaredField(fieldInfo.getName());
+                        if (declaredField.isAnnotationPresent(Inject.class) &&
+                                declaredField.isAnnotationPresent(Named.class) &&
+                                QueuePublisher.class.isAssignableFrom(declaredField.getType()))
+                        {
+                            Named annotation = declaredField.getAnnotation(Named.class);
+                            if (boundKeys.contains(annotation.value()))
+                            {
+                                continue;
+                            }
+                            else boundKeys.add(annotation.value());
+
+                            String routingKey = queueExchangeName + "_" + annotation.value();
+                            if(!routingKeysUsed.contains(routingKey))
+                            {
+                                bind(Key.get(QueuePublisher.class, Names.named(annotation.value())))
+                                        .toProvider(new RabbitMQQueuePublisherProvider(annotation.value(), queueExchangeName, routingKey));
+                            }
+                        }
+                    }
+                    catch (Throwable e)
+                    {
+                     //   e.printStackTrace();
+                        //field not declared
+                    }
+                }
+            }
         }
     }
 

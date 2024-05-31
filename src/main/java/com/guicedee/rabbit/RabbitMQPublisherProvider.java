@@ -1,4 +1,4 @@
-package com.guicedee.rabbit.implementations;
+package com.guicedee.rabbit;
 
 import com.google.inject.Inject;
 import com.google.inject.Provider;
@@ -28,6 +28,7 @@ public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
     @Override
     public RabbitMQPublisher get()
     {
+
         if (publisher == null)
         {
             if (done.isDone())
@@ -51,7 +52,7 @@ public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
                 });
             }
         }
-        while (publisher == null)
+        while (publisher == null || !Thread.interrupted())
         {
             try
             {
@@ -59,9 +60,8 @@ public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
             }
             catch (InterruptedException e)
             {
-                throw new RuntimeException(e);
+                Thread.currentThread().interrupt();
             }
-
         }
         return publisher;
     }

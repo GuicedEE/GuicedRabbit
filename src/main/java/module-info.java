@@ -4,6 +4,9 @@ import com.guicedee.rabbit.implementations.RabbitMQModule;
 import com.guicedee.rabbit.implementations.RabbitPostStartup;
 
 module com.guicedee.rabbit {
+    exports com.guicedee.rabbit;
+    exports com.guicedee.rabbit.implementations.def;
+
     requires transitive io.vertx.rabbitmq;
 
     requires com.guicedee.client;
@@ -15,4 +18,5 @@ module com.guicedee.rabbit {
     provides IGuiceModule with RabbitMQModule;
 
     opens com.guicedee.rabbit.implementations to com.google.guice;
+    opens com.guicedee.rabbit to com.google.guice;
 }

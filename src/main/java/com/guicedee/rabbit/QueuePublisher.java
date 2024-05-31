@@ -16,11 +16,11 @@ public class QueuePublisher
     private QueueDefinition queueDefinition;
     private String exchangeName;
     private String routingKey;
+
     /**
      * If the loading is done
      */
     public static CompletableFuture<Void> done = new CompletableFuture<>();
-
 
     public QueuePublisher(QueueDefinition queueDefinition, String exchangeName, String routingKey)
     {

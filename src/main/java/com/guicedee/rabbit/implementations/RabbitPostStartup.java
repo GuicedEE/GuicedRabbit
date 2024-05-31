@@ -15,6 +15,12 @@ import io.github.classgraph.ScanResult;
 import io.vertx.rabbitmq.RabbitMQClient;
 import lombok.extern.java.Log;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+import static com.guicedee.rabbit.RabbitMQConsumerProvider.consumerCreated;
+
 @Log
 public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
 {
@@ -22,22 +28,29 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
     RabbitMQClient client;
 
     @Override
-    public void postLoad()
+    public List<CompletableFuture<Boolean>> postLoad()
     {
         ScanResult scanResult = IGuiceContext.instance()
                                              .getScanResult();
+
+        List<CompletableFuture<Boolean>> futures = new ArrayList<>();
+        CompletableFuture<Boolean> objectCompletableFuture = new CompletableFuture<>().newIncompleteFuture();
+        futures.add(objectCompletableFuture);
+
         ClassInfoList queues = scanResult.getClassesWithAnnotation(QueueDefinition.class);
         for (ClassInfo queueClassInfo : queues)
         {
             Class<?> clazz = queueClassInfo.loadClass();
             Class<QueueConsumer> aClass = (Class<QueueConsumer>) clazz;
+            CompletableFuture.allOf(consumerCreated.toArray(new CompletableFuture[]{}))
+                             .join();
+            objectCompletableFuture.complete(true);
             QueueDefinition queueDefinition = aClass.getAnnotation(QueueDefinition.class);
             log.config("Starting Queue Consumer - " + queueDefinition.value());
             Key<QueuePublisher> queuePublisherKey = Key.get(QueuePublisher.class, Names.named(queueDefinition.value()));
-            QueuePublisher queuePublisher = IGuiceContext.get(queuePublisherKey);
-            QueueConsumer queueConsumer = IGuiceContext.get(Key.get(QueueConsumer.class, Names.named(queueDefinition.value())));
-            log.config("Started Queue Consumer - " + queueConsumer);
         }
+
+        return futures;
     }
 
     public static io.vertx.rabbitmq.QueueOptions toOptions(QueueOptions options)
@@ -50,5 +63,11 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         opt.setKeepMostRecent(options.keepMostRecent());
 
         return opt;
+    }
+
+    @Override
+    public Integer sortOrder()
+    {
+        return Integer.MIN_VALUE + 600;
     }
 }

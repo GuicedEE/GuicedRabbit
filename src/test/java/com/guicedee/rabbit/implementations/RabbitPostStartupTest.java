@@ -18,6 +18,10 @@ class RabbitPostStartupTest
     private QueuePublisher singleConsumer;
 
 
+    @Inject
+    @Named(value = "not-included-queue")
+    private QueuePublisher blankConsumer;
+
 
     public static void main(String[] args)
     {
