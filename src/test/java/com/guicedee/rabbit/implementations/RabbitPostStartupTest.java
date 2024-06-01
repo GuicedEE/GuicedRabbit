@@ -35,25 +35,26 @@ class RabbitPostStartupTest
     @Test
     void configure()
     {
-        var rabbit = new RabbitMQContainer(DockerImageName.parse("rabbitmq:3.7.25-management-alpine"));
-        rabbit.setExposedPorts(List.of(5672));
-        rabbit.setHostAccessible(true);
-        rabbit.setPortBindings(List.of("5672"));
-        rabbit.start();
+        try (var rabbit = new RabbitMQContainer(DockerImageName.parse("rabbitmq:3.7.25-management-alpine")))
+        {
+            rabbit.setExposedPorts(List.of(5672));
+            rabbit.setHostAccessible(true);
+            rabbit.setPortBindings(List.of("5672"));
+            rabbit.start();
 
-        IGuiceContext.instance()
-                     .getConfig()
-                     .setClasspathScanning(true)
-                     .setAnnotationScanning(true)
-                     .setFieldScanning(true);
+            IGuiceContext.instance()
+                         .getConfig()
+                         .setClasspathScanning(true)
+                         .setAnnotationScanning(true)
+                         .setFieldScanning(true);
 
-        RabbitMQClient rabbitMQClient = IGuiceContext.get(RabbitMQClient.class);
-        RabbitPostStartupTest test = IGuiceContext.get(RabbitPostStartupTest.class);
-        System.out.println("test");
-        test.queuePublisher.publish("Test");
-        System.out.println("sent");
-        test.singleConsumer.publish("Tester");
-        System.out.println("sent 2");
-
+            RabbitMQClient rabbitMQClient = IGuiceContext.get(RabbitMQClient.class);
+            RabbitPostStartupTest test = IGuiceContext.get(RabbitPostStartupTest.class);
+            System.out.println("test");
+            test.queuePublisher.publish("Test");
+            System.out.println("sent");
+            test.singleConsumer.publish("Tester");
+            System.out.println("sent 2");
+        }
     }
 }
