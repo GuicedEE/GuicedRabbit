@@ -2,6 +2,7 @@ package com.guicedee.rabbit.implementations;
 
 import com.google.inject.Inject;
 import com.google.inject.Provider;
+import com.guicedee.client.Environment;
 import com.guicedee.client.IGuiceContext;
 import com.guicedee.rabbit.QueueDefinition;
 import com.guicedee.rabbit.QueueExchange;
@@ -67,6 +68,10 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
     @Override
     public RabbitMQClient get()
     {
+        if (!"5672".equalsIgnoreCase(Environment.getProperty("RABBIT_MQ_PORT", "5672")))
+        {
+            options.setPort(Integer.parseInt(Environment.getProperty("RABBIT_MQ_PORT", "5672")));
+        }
         client = RabbitMQClient.create(vertx, options);
         startQueueFuture = client.start();
         startQueueFuture.andThen((result) -> handle(client, result));

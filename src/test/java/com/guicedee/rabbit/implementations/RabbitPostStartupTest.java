@@ -6,6 +6,10 @@ import io.vertx.rabbitmq.RabbitMQClient;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import org.junit.jupiter.api.Test;
+import org.testcontainers.containers.RabbitMQContainer;
+import org.testcontainers.utility.DockerImageName;
+
+import java.util.List;
 
 class RabbitPostStartupTest
 {
@@ -31,6 +35,12 @@ class RabbitPostStartupTest
     @Test
     void configure()
     {
+        var rabbit = new RabbitMQContainer(DockerImageName.parse("rabbitmq:3.7.25-management-alpine"));
+        rabbit.setExposedPorts(List.of(5672));
+        rabbit.setHostAccessible(true);
+        rabbit.setPortBindings(List.of("5672"));
+        rabbit.start();
+
         IGuiceContext.instance()
                      .getConfig()
                      .setClasspathScanning(true)

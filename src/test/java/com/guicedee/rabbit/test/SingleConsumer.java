@@ -12,5 +12,6 @@ public class SingleConsumer implements QueueConsumer
     public void consume(RabbitMQMessage message)
     {
         System.out.println("Single consumer got - " + message.body());
+        System.exit(0);
     }
 }

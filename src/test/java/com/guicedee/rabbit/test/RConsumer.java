@@ -10,7 +10,7 @@ import jakarta.inject.Singleton;
 @RabbitConnectionOptions(value = "connection-1",
                          password = "guest",
                          automaticRecoveryEnabled = false,
-                         reconnectAttempts = 10,
+                         reconnectAttempts = 2,
                          reconnectInterval = 500)
 @QueueDefinition(value = "test-queue-consumer")
 @Singleton
