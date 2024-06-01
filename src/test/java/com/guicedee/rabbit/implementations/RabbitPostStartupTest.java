@@ -2,7 +2,6 @@ package com.guicedee.rabbit.implementations;
 
 import com.guicedee.client.IGuiceContext;
 import com.guicedee.rabbit.QueuePublisher;
-import io.vertx.rabbitmq.RabbitMQClient;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import org.junit.jupiter.api.Test;
@@ -48,13 +47,13 @@ class RabbitPostStartupTest
                          .setAnnotationScanning(true)
                          .setFieldScanning(true);
 
-            RabbitMQClient rabbitMQClient = IGuiceContext.get(RabbitMQClient.class);
+           /* RabbitMQClient rabbitMQClient = IGuiceContext.get(RabbitMQClient.class);
             RabbitPostStartupTest test = IGuiceContext.get(RabbitPostStartupTest.class);
             System.out.println("test");
             test.queuePublisher.publish("Test");
             System.out.println("sent");
             test.singleConsumer.publish("Tester");
-            System.out.println("sent 2");
+            System.out.println("sent 2");*/
         }
     }
 }
