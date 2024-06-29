@@ -1,5 +1,6 @@
 package com.guicedee.rabbit;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.guicedee.client.IGuiceContext;
 import com.rabbitmq.client.AMQP;
 import io.vertx.core.buffer.Buffer;
@@ -8,6 +9,7 @@ import jakarta.inject.Inject;
 
 import java.util.concurrent.CompletableFuture;
 
+@JsonSerialize(as = Void.class)
 public class QueuePublisher
 {
     @Inject

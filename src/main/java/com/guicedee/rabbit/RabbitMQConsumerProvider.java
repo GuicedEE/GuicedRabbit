@@ -2,10 +2,14 @@ package com.guicedee.rabbit;
 
 import com.google.inject.Inject;
 import com.google.inject.Provider;
+import com.guicedee.client.CallScoper;
 import com.guicedee.client.IGuiceContext;
+import com.guicedee.guicedinjection.interfaces.IGuicePreDestroy;
+import com.guicedee.guicedservlets.websockets.options.CallScopeProperties;
+import com.guicedee.guicedservlets.websockets.options.CallScopeSource;
+import com.guicedee.rabbit.support.TransactedMessageConsumer;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQConsumer;
-import jakarta.inject.Singleton;
 import lombok.extern.java.Log;
 
 import java.util.ArrayList;
@@ -16,8 +20,7 @@ import java.util.logging.Level;
 import static com.guicedee.rabbit.implementations.RabbitPostStartup.toOptions;
 
 @Log
-@Singleton
-public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
+public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuicePreDestroy<RabbitMQConsumerProvider>
 {
     @Inject
     private RabbitMQClient client;
@@ -28,17 +31,33 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
     private QueueConsumer queueConsumer = null;
     private RabbitMQConsumer consumer = null;
 
+    private String routingKey;
+    private String exchange;
+
     CompletableFuture<Void> future = new CompletableFuture<>().newIncompleteFuture();
     public static List<CompletableFuture<Void>> consumerCreated = new ArrayList<>();
 
-    public RabbitMQConsumerProvider(QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
+    public RabbitMQConsumerProvider(QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz, String routingKey, String exchange)
     {
         this.queueDefinition = queueDefinition;
         this.clazz = clazz;
+        this.routingKey = routingKey;
+        this.exchange = exchange;
     }
 
-    @Override
-    public QueueConsumer get()
+    @Inject
+    void setup()
+    {
+        if(queueDefinition.options().autobind())
+        {
+            log.config("Setting up queue consumer - " + clazz.getSimpleName() + " - " + queueDefinition.value());
+            buildConsumer();
+        }else {
+            log.warning("Queue consumer not being created on definition. To consume queue make sure to call binding");
+        }
+    }
+
+    private void buildConsumer()
     {
         if (!client.isConnected())
         {
@@ -53,7 +72,17 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
         {
             createConsumer();
         }
-        CompletableFuture.allOf(future).join();
+    }
+
+    @Override
+    public QueueConsumer get()
+    {
+        if (queueConsumer == null)
+        {
+            buildConsumer();
+        }
+        CompletableFuture.allOf(future)
+                         .join();
         return queueConsumer;
     }
 
@@ -67,27 +96,57 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
                 consumer.setQueueName(queueDefinition.value());
                 consumer = consumer.fetch(queueDefinition.options()
                                                          .fetchCount());
+
                 consumer.handler((message) -> {
                     try
                     {
-                        try
-                        {
-                            if (queueConsumer == null)
+                        IGuiceContext.startup.thenRunAsync(() -> {
+
+                            CallScoper scoper = IGuiceContext.get(CallScoper.class);
+                            scoper.enter();
+                            CallScopeProperties properties = IGuiceContext.get(CallScopeProperties.class);
+                            properties.setSource(CallScopeSource.RabbitMQ);
+                            try
                             {
-                                queueConsumer = clazz.newInstance();
-                                IGuiceContext.instance()
-                                             .inject()
-                                             .injectMembers(queueConsumer);
+                                if (queueDefinition.options()
+                                                   .transacted())
+                                {
+                                    TransactedMessageConsumer transactedMessageConsumer = IGuiceContext.get(TransactedMessageConsumer.class);
+                                    if (queueConsumer != null)
+                                    {
+                                        transactedMessageConsumer.setQueueConsumer(queueConsumer);
+                                    }
+                                    transactedMessageConsumer.execute(clazz, message);
+                                    if (queueConsumer == null)
+                                    {
+                                        queueConsumer = transactedMessageConsumer.getQueueConsumer();
+                                    }
+                                }
+                                else
+                                {
+                                    if (queueConsumer == null)
+                                    {
+                                        queueConsumer = IGuiceContext.get(clazz);
+                                    }
+                                    try
+                                    {
+                                        queueConsumer.consume(message);
+                                    }
+                                    catch (Throwable e)
+                                    {
+                                        log.log(Level.SEVERE, "Error while creating consumer - " + clazz.getSimpleName(), e);
+                                        throw new RuntimeException(e);
+                                    }
+                                }
+                            }finally
+                            {
+                                scoper.exit();
                             }
-                        }
-                        catch (InstantiationException | IllegalAccessException e)
-                        {
-                            throw new RuntimeException(e);
-                        }
-                        queueConsumer.consume(message);
+                        });
                     }
                     catch (Throwable e)
                     {
+                        log.log(Level.SEVERE, "Error while creating consumer", e);
                         throw new RuntimeException(e);
                     }
                 });
@@ -108,5 +167,21 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>
     public void resume()
     {
         consumer.resume();
+    }
+
+    @Override
+    public void onDestroy()
+    {
+        if (consumer != null)
+        {
+            log.config("Shutting down consumer - " + clazz.getSimpleName());
+            consumer.cancel();
+        }
+    }
+
+    @Override
+    public Integer sortOrder()
+    {
+        return 25;
     }
 }

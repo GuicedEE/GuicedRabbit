@@ -52,7 +52,7 @@ public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
                 });
             }
         }
-        while (publisher == null || !Thread.interrupted())
+        while (publisher == null && !Thread.interrupted())
         {
             try
             {

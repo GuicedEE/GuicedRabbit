@@ -65,6 +65,11 @@
         </dependency>
 
         <dependency>
+            <groupId>com.guicedee.persistence</groupId>
+            <artifactId>guiced-persistence</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>com.guicedee.servlets</groupId>
             <artifactId>guiced-vertx</artifactId>
             <scope>test</scope>

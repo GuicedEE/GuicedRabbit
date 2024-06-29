@@ -20,4 +20,6 @@ public @interface QueueOptions
     boolean noLocal() default false;
     boolean keepMostRecent() default true;
     int maxInternalQueueSize() default Integer.MAX_VALUE;
+    boolean transacted() default true;
+    boolean autobind() default true;
 }

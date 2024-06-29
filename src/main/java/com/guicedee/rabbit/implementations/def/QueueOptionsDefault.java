@@ -19,7 +19,9 @@ public class QueueOptionsDefault implements QueueOptions
     private int maxInternalQueueSize = Integer.MAX_VALUE;
     private boolean noLocal;
     private boolean keepMostRecent = true;
-    
+    private boolean transacted = true;
+    private boolean autobind = true;
+
     @Override
     public int priority()
     {
@@ -102,5 +104,16 @@ public class QueueOptionsDefault implements QueueOptions
     public int hashCode()
     {
         return "0".hashCode();
+    }
+
+    public boolean transacted()
+    {
+        return transacted;
+    }
+
+    @Override
+    public boolean autobind()
+    {
+        return autobind;
     }
 }

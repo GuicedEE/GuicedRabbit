@@ -1,9 +1,10 @@
-package com.guicedee.rabbit.implementations;
+package com.guicedee.rabbit.implementations.def;
 
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.guicedee.client.Environment;
 import com.guicedee.client.IGuiceContext;
+import com.guicedee.guicedinjection.interfaces.IGuicePreDestroy;
 import com.guicedee.rabbit.QueueDefinition;
 import com.guicedee.rabbit.QueueExchange;
 import io.github.classgraph.ClassInfo;
@@ -20,10 +21,7 @@ import jakarta.inject.Singleton;
 import lombok.Getter;
 import lombok.extern.java.Log;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -32,7 +30,8 @@ import static com.guicedee.rabbit.QueuePublisher.done;
 
 @Singleton
 @Log
-public class RabbitMQClientProvider extends AbstractVerticle implements Provider<RabbitMQClient>
+public class RabbitMQClientProvider extends AbstractVerticle implements Provider<RabbitMQClient>,
+                                                                        IGuicePreDestroy<RabbitMQClientProvider>
 {
     @Inject
     Vertx vertx;
@@ -73,9 +72,10 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
             options.setPort(Integer.parseInt(Environment.getProperty("RABBIT_MQ_PORT", "5672")));
         }
         client = RabbitMQClient.create(vertx, options);
+
         startQueueFuture = client.start();
         startQueueFuture.andThen((result) -> handle(client, result));
-        while(!startQueueFuture.isComplete())
+        while (!startQueueFuture.isComplete())
         {
             try
             {
@@ -102,11 +102,14 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
         ClassInfoList queueConsumers = scanResult
                 .getClassesWithAnnotation(QueueDefinition.class);
         ClassInfoList exchangeAnnotations = scanResult.getClassesWithAnnotation(QueueExchange.class);
-        if(!rabbitMQClient.isConnected())
-        rabbitMQClient.addConnectionEstablishedCallback(promise -> {
-            processNewConnection(rabbitMQClient, exchangeAnnotations, queueConsumers);
-        });
-        else{
+        if (!rabbitMQClient.isConnected())
+        {
+            rabbitMQClient.addConnectionEstablishedCallback(promise -> {
+                processNewConnection(rabbitMQClient, exchangeAnnotations, queueConsumers);
+            });
+        }
+        else
+        {
             processNewConnection(rabbitMQClient, exchangeAnnotations, queueConsumers);
         }
     }
@@ -139,9 +142,12 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                            {
                                                                log.info("Exchange successfully declared with Dead Letter Exchange");
                                                                done.completeAsync(() -> {
-                                                                   createQueue(rabbitMQClient, queueConsumers, exchangeName);
-                                                                   return null;
-                                                               }).thenRun(()->rabbitMQClientStarted.complete(null));
+                                                                       Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
+                                                                       onQueueExchange.forEach(a -> a.perform(client, exchangeName));
+                                                                       createQueue(rabbitMQClient, queueConsumers, exchangeName);
+                                                                       return null;
+                                                                   })
+                                                                   .thenRun(() -> rabbitMQClientStarted.complete(null));
                                                            }
                                                            else
                                                            {
@@ -163,6 +169,8 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                     {
                         log.info("Exchange successfully declared with config");
                         done.completeAsync(() -> {
+                            Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
+                            onQueueExchange.forEach(a -> a.perform(client, exchangeName));
                             createQueue(rabbitMQClient, queueConsumers, exchangeName);
                             return null;
                         });
@@ -176,7 +184,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
         }
     }
 
-    private static void createQueue(RabbitMQClient rabbitMQClient, ClassInfoList queueConsumers, String exchangeName)
+    public static void createQueue(RabbitMQClient rabbitMQClient, ClassInfoList queueConsumers, String exchangeName)
     {
         for (ClassInfo consumer : queueConsumers)
         {
@@ -218,7 +226,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                 rabbitMQClient.queueBind(queueDefinition.value(), exchangeName, routingKey, arguments, onResult -> {
                                                     if (onResult.succeeded())
                                                     {
-                                                        log.info("Bound queue [" + queueDefinition.value() + "] successfully");
+                                                        log.config("Bound queue [" + queueDefinition.value() + "] successfully");
                                                     }
                                                     else
                                                     {
@@ -230,5 +238,23 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                         }
             );
         }
+    }
+
+    @Override
+    public void onDestroy()
+    {
+        if (client != null && client.isConnected())
+        {
+            client.stop((a) -> {
+                log.config("Rabbit MQ Client Shutdown");
+            });
+        }
+    }
+
+    //after consumers shutdown
+    @Override
+    public Integer sortOrder()
+    {
+        return 50;
     }
 }

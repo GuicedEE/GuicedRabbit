@@ -4,6 +4,7 @@ import com.guicedee.rabbit.implementations.RabbitMQModule;
 import com.guicedee.rabbit.implementations.RabbitPostStartup;
 
 module com.guicedee.rabbit {
+    uses com.guicedee.rabbit.implementations.def.OnQueueExchangeDeclared;
     exports com.guicedee.rabbit;
     exports com.guicedee.rabbit.implementations.def;
 
@@ -13,10 +14,13 @@ module com.guicedee.rabbit {
     requires static lombok;
 
     requires com.rabbitmq.client;
+    requires jakarta.transaction;
 
     provides IGuicePostStartup with RabbitPostStartup;
     provides IGuiceModule with RabbitMQModule;
 
     opens com.guicedee.rabbit.implementations to com.google.guice;
-    opens com.guicedee.rabbit to com.google.guice;
+    opens com.guicedee.rabbit.support to com.google.guice;
+    opens com.guicedee.rabbit to com.google.guice,com.fasterxml.jackson.databind;
+    opens com.guicedee.rabbit.implementations.def to com.google.guice,com.fasterxml.jackson.databind;
 }
