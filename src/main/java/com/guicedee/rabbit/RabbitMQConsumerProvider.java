@@ -48,11 +48,14 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
     @Inject
     void setup()
     {
-        if(queueDefinition.options().autobind())
+        if (queueDefinition.options()
+                           .autobind())
         {
             log.config("Setting up queue consumer - " + clazz.getSimpleName() + " - " + queueDefinition.value());
             buildConsumer();
-        }else {
+        }
+        else
+        {
             log.warning("Queue consumer not being created on definition. To consume queue make sure to call binding");
         }
     }
@@ -100,8 +103,7 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                 consumer.handler((message) -> {
                     try
                     {
-                        IGuiceContext.startup.thenRunAsync(() -> {
-
+                        IGuiceContext.instance().getLoadingFinished().thenRunAsync(() -> {
                             CallScoper scoper = IGuiceContext.get(CallScoper.class);
                             scoper.enter();
                             CallScopeProperties properties = IGuiceContext.get(CallScopeProperties.class);
@@ -116,7 +118,28 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                     {
                                         transactedMessageConsumer.setQueueConsumer(queueConsumer);
                                     }
-                                    transactedMessageConsumer.execute(clazz, message);
+                                    try
+                                    {
+                                        transactedMessageConsumer.execute(clazz, message);
+                                        if (!queueDefinition.options()
+                                                            .autoAck())
+                                        {
+                                            client.basicAck(message.envelope()
+                                                                   .getDeliveryTag(), false, asyncResult -> {
+                                                log.fine("Confirmed send of message");
+                                            });
+                                        }
+                                    }catch (Throwable T)
+                                    {
+                                        if (!queueDefinition.options()
+                                                            .autoAck())
+                                        {
+                                            client.basicNack(message.envelope()
+                                                                    .getDeliveryTag(), false,false, asyncResult -> {
+                                            });
+                                        }
+                                        log.log(Level.SEVERE,"ERROR processing of transacted message",T);
+                                    }
                                     if (queueConsumer == null)
                                     {
                                         queueConsumer = transactedMessageConsumer.getQueueConsumer();
@@ -131,14 +154,32 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                     try
                                     {
                                         queueConsumer.consume(message);
+                                        if (!queueDefinition.options()
+                                                            .autoAck())
+                                        {
+                                            client.basicAck(message.envelope()
+                                                                   .getDeliveryTag(), false, asyncResult -> {
+                                                log.fine("Confirmed send of message");
+                                            });
+
+                                        }
                                     }
                                     catch (Throwable e)
                                     {
                                         log.log(Level.SEVERE, "Error while creating consumer - " + clazz.getSimpleName(), e);
+                                        if (!queueDefinition.options()
+                                                            .autoAck())
+                                        {
+                                            client.basicNack(message.envelope()
+                                                                   .getDeliveryTag(), false,false, asyncResult -> {
+                                                log.log(Level.SEVERE,"ERROR send of message",e);
+                                            });
+                                        }
                                         throw new RuntimeException(e);
                                     }
                                 }
-                            }finally
+                            }
+                            finally
                             {
                                 scoper.exit();
                             }
@@ -150,12 +191,12 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                         throw new RuntimeException(e);
                     }
                 });
-                future.complete(null);
             }
             else
             {
                 log.log(Level.SEVERE, "Could not bind rabbit mq consumer on queue [" + queueDefinition.value() + "]", event.cause());
             }
+            future.complete(null);
         });
     }
 
