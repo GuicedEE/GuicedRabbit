@@ -131,7 +131,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                                         .toString(), queueExchange.durable(), queueExchange.autoDelete(), onResult -> {
                     if (onResult.succeeded())
                     {
-                        log.config("Dead Letter Exchange successfully declared ");
+                        log.config("Dead Letter Exchange successfully declared - " + deadLetter);
                         config.put("alternate-exchange", exchangeName);
                         rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
                                                                                   .toString(), queueExchange.durable(),
@@ -167,7 +167,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                                           .toString(), queueExchange.durable(), queueExchange.autoDelete(), exchangeDeclared -> {
                     if (exchangeDeclared.succeeded())
                     {
-                        log.info("Exchange successfully declared with config");
+                        log.info("Exchange successfully declared with config - " + exchangeName);
                         done.completeAsync(() -> {
                             Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
                             onQueueExchange.forEach(a -> a.perform(client, exchangeName));
