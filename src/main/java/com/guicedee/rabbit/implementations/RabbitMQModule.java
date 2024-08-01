@@ -8,6 +8,7 @@ import com.guicedee.client.IGuiceContext;
 import com.guicedee.guicedinjection.interfaces.IGuiceModule;
 import com.guicedee.rabbit.*;
 import com.guicedee.rabbit.implementations.def.RabbitMQClientProvider;
+import com.guicedee.rabbit.support.TransactedMessageConsumer;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.FieldInfo;
@@ -17,6 +18,7 @@ import io.vertx.rabbitmq.RabbitMQOptions;
 import io.vertx.rabbitmq.RabbitMQPublisher;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 import lombok.extern.java.Log;
 
 import java.lang.reflect.Field;
@@ -61,7 +63,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                          .add(clientProvider);
         }
         //also per connection name
-        bind(RabbitMQPublisher.class).toProvider(RabbitMQPublisherProvider.class);
+        bind(RabbitMQPublisher.class).toProvider(RabbitMQPublisherProvider.class).in(com.google.inject.Singleton.class);
 
 
         ClassInfoList queues = scanResult.getClassesWithAnnotation(QueueDefinition.class);
@@ -93,6 +95,9 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                          .loadPreDestroyServices()
                          .add(provider);
             bind(Key.get(aClass));
+            bind(Key.get(aClass,Names.named(queueDefinition.value()))).to(aClass).in(Singleton.class);
+            bind(Key.get(TransactedMessageConsumer.class,Names.named(queueDefinition.value()))).to(TransactedMessageConsumer.class).in(Singleton.class);
+
             if (queueDefinition.options()
                                .autobind())
             {
@@ -108,7 +113,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                 routingKeysUsed.add(routingKey);
                 RabbitMQQueuePublisherProvider rabbitMQQueuePublisherProvider = new RabbitMQQueuePublisherProvider(queueDefinition, queueExchangeName, routingKey);
                 bind(Key.get(QueuePublisher.class, Names.named(queueDefinition.value())))
-                        .toProvider(rabbitMQQueuePublisherProvider);
+                        .toProvider(rabbitMQQueuePublisherProvider).in(Singleton.class);
                 IGuiceContext.instance()
                              .loadPreDestroyServices()
                              .add(rabbitMQQueuePublisherProvider);
@@ -144,7 +149,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                             if (!routingKeysUsed.contains(routingKey))
                             {
                                 bind(Key.get(QueuePublisher.class, Names.named(annotation.value())))
-                                        .toProvider(new RabbitMQQueuePublisherProvider(annotation.value(), queueExchangeName, routingKey));
+                                        .toProvider(new RabbitMQQueuePublisherProvider(annotation.value(), queueExchangeName, routingKey)).in(Singleton.class);
                             }
                         }
                     }

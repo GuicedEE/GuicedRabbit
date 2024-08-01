@@ -7,8 +7,6 @@ import io.vertx.core.buffer.Buffer;
 import io.vertx.rabbitmq.RabbitMQPublisher;
 import jakarta.inject.Inject;
 
-import java.util.concurrent.CompletableFuture;
-
 @JsonSerialize(as = Void.class)
 public class QueuePublisher
 {
@@ -19,11 +17,6 @@ public class QueuePublisher
     private String exchangeName;
     private String routingKey;
 
-    /**
-     * If the loading is done
-     */
-    public static CompletableFuture<Void> done = new CompletableFuture<>();
-
     public QueuePublisher(QueueDefinition queueDefinition, String exchangeName, String routingKey)
     {
         this.queueDefinition = queueDefinition;
@@ -33,16 +26,7 @@ public class QueuePublisher
 
     public void publish(String body)
     {
-        if (done.isDone())
-        {
-            sendMessage(body);
-        }
-        else
-        {
-            done.thenRun(() -> {
-                sendMessage(body);
-            });
-        }
+        sendMessage(body);
     }
 
     private void sendMessage(String body)

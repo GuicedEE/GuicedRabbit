@@ -9,10 +9,9 @@ import io.vertx.rabbitmq.RabbitMQPublisherOptions;
 import jakarta.inject.Singleton;
 import lombok.extern.java.Log;
 
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
 
-import static com.guicedee.rabbit.QueuePublisher.done;
-
+import static com.guicedee.rabbit.implementations.def.RabbitMQClientProvider.rabbitMQClientStarted;
 
 @Log
 @Singleton
@@ -31,36 +30,36 @@ public class RabbitMQPublisherProvider implements Provider<RabbitMQPublisher>
 
         if (publisher == null)
         {
-            if (done.isDone())
+            if (rabbitMQClientStarted.isDone())
             {
                 publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
             }
             else
             {
-                done.thenRun(() -> {
-                    if (!client.isConnected())
-                    {
-                        client.addConnectionEstablishedCallback((est) -> {
+                try
+                {
+                    rabbitMQClientStarted.thenRun(() -> {
+                        if (!client.isConnected())
+                        {
+                            client.addConnectionEstablishedCallback((est) -> {
+                                publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
+                            });
+                        }
+                        else
+                        {
                             publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
-                        });
-                    }
-                    else
-                    {
-                        publisher = RabbitMQPublisher.create(vertx, client, new RabbitMQPublisherOptions());
 
-                    }
-                });
-            }
-        }
-        while (publisher == null && !Thread.interrupted())
-        {
-            try
-            {
-                TimeUnit.MILLISECONDS.sleep(100);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
+                        }
+                    }).get();
+                }
+                catch (InterruptedException e)
+                {
+                    throw new RuntimeException(e);
+                }
+                catch (ExecutionException e)
+                {
+                    throw new RuntimeException(e);
+                }
             }
         }
         return publisher;

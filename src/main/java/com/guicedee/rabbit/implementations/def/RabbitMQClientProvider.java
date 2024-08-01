@@ -23,10 +23,8 @@ import lombok.extern.java.Log;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
-
-import static com.guicedee.rabbit.QueuePublisher.done;
 
 @Singleton
 @Log
@@ -37,6 +35,7 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
     Vertx vertx;
 
     private final RabbitMQOptions options;
+
     public static Future<Void> startQueueFuture;
 
     public static CompletableFuture<Void> rabbitMQClientStarted = new CompletableFuture<>().newIncompleteFuture();
@@ -74,17 +73,19 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
         client = RabbitMQClient.create(vertx, options);
 
         startQueueFuture = client.start();
-        startQueueFuture.andThen((result) -> handle(client, result));
-        while (!startQueueFuture.isComplete())
+        startQueueFuture.andThen((result) -> handle(client, result))
+                        .result();
+        try
         {
-            try
-            {
-                TimeUnit.MILLISECONDS.sleep(100);
-            }
-            catch (InterruptedException e)
-            {
-                throw new RuntimeException(e);
-            }
+            rabbitMQClientStarted.get();
+        }
+        catch (InterruptedException e)
+        {
+            throw new RuntimeException(e);
+        }
+        catch (ExecutionException e)
+        {
+            throw new RuntimeException(e);
         }
         return client;
     }
@@ -141,18 +142,15 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                                                            if (exchangeDeclared.succeeded())
                                                            {
                                                                log.info("Exchange successfully declared with Dead Letter Exchange");
-                                                               done.completeAsync(() -> {
-                                                                       Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
-                                                                       onQueueExchange.forEach(a -> a.perform(client, exchangeName));
-                                                                       createQueue(rabbitMQClient, queueConsumers, exchangeName);
-                                                                       return null;
-                                                                   })
-                                                                   .thenRun(() -> rabbitMQClientStarted.complete(null));
+                                                               Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
+                                                               onQueueExchange.forEach(a -> a.perform(client, exchangeName));
+                                                               createQueue(rabbitMQClient, queueConsumers, exchangeName);
                                                            }
                                                            else
                                                            {
                                                                log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
                                                            }
+                                                           rabbitMQClientStarted.complete(null);
                                                        });
                     }
                     else
@@ -168,17 +166,15 @@ public class RabbitMQClientProvider extends AbstractVerticle implements Provider
                     if (exchangeDeclared.succeeded())
                     {
                         log.info("Exchange successfully declared with config - " + exchangeName);
-                        done.completeAsync(() -> {
-                            Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
-                            onQueueExchange.forEach(a -> a.perform(client, exchangeName));
-                            createQueue(rabbitMQClient, queueConsumers, exchangeName);
-                            return null;
-                        });
+                        Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
+                        onQueueExchange.forEach(a -> a.perform(client, exchangeName));
+                        createQueue(rabbitMQClient, queueConsumers, exchangeName);
                     }
                     else
                     {
                         log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
                     }
+                    rabbitMQClientStarted.complete(null);
                 });
             }
         }
