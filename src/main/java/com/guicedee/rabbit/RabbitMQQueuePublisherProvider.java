@@ -3,31 +3,37 @@ package com.guicedee.rabbit;
 import com.google.inject.Provider;
 import com.guicedee.guicedinjection.interfaces.IGuicePreDestroy;
 import com.guicedee.rabbit.implementations.def.QueueOptionsDefault;
+import com.guicedee.rabbit.implementations.def.RabbitMQClientProvider;
 import jakarta.inject.Singleton;
+import lombok.Getter;
 import lombok.extern.java.Log;
 
 import java.lang.annotation.Annotation;
 
-@Singleton
 @Log
 public class RabbitMQQueuePublisherProvider implements Provider<QueuePublisher>, IGuicePreDestroy<RabbitMQQueuePublisherProvider>
 {
+    private RabbitMQClientProvider clientProvider;
+    @Getter
     private final QueueDefinition queueDefinition;
     private final String exchangeName;
     private final String routingKey;
-
     private QueuePublisher queuePublisher;
+    private final boolean confirmPublish;
 
-    public RabbitMQQueuePublisherProvider(QueueDefinition queueDefinition, String exchangeName, String routingKey)
+    public RabbitMQQueuePublisherProvider(RabbitMQClientProvider clientProvider, QueueDefinition queueDefinition, String exchangeName, String routingKey, boolean confirmPublish)
     {
+        this.clientProvider = clientProvider;
         this.queueDefinition = queueDefinition;
         this.exchangeName = exchangeName;
         this.routingKey = routingKey;
+        this.confirmPublish = confirmPublish;
     }
 
-
-    public RabbitMQQueuePublisherProvider(String queueDefinition, String exchangeName, String routingKey)
+    public RabbitMQQueuePublisherProvider(RabbitMQClientProvider clientProvider, String queueDefinition, String exchangeName, String routingKey, boolean confirmPublish)
     {
+        this.clientProvider = clientProvider;
+        this.confirmPublish = confirmPublish;
         this.queueDefinition = new QueueDefinition(){
             @Override
             public Class<? extends Annotation> annotationType()
@@ -52,6 +58,7 @@ public class RabbitMQQueuePublisherProvider implements Provider<QueuePublisher>,
             {
                 return exchangeName;
             }
+
         };
         this.exchangeName = exchangeName;
         this.routingKey = routingKey;
@@ -61,7 +68,7 @@ public class RabbitMQQueuePublisherProvider implements Provider<QueuePublisher>,
     public QueuePublisher get()
     {
         if(this.queuePublisher == null)
-            queuePublisher = new QueuePublisher(queueDefinition, exchangeName, routingKey);
+            queuePublisher = new QueuePublisher(clientProvider,confirmPublish, queueDefinition, exchangeName, routingKey);
 
         return queuePublisher;
     }
@@ -69,11 +76,6 @@ public class RabbitMQQueuePublisherProvider implements Provider<QueuePublisher>,
     @Override
     public void onDestroy()
     {
-        if (queuePublisher != null)
-        {
-            log.config("Pausing queue publisher - " + this.routingKey);
-            queuePublisher.pause();
-        }
     }
 
     //before consumers and client

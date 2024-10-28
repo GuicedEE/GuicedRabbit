@@ -23,7 +23,7 @@ public class TransactedMessageConsumer
     {
         if (queueConsumer == null)
         {
-            Key<QueueConsumer> queueConsumerKey = (Key<QueueConsumer>) Key.get(clazz, Names.named(queueDefinition.value()));
+            Key<QueueConsumer> queueConsumerKey = (Key<QueueConsumer>) Key.get(QueueConsumer.class, Names.named(queueDefinition.value()));
             queueConsumer = IGuiceContext.get(queueConsumerKey);
         }
         queueConsumer.consume(message);

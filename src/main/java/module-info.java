@@ -9,6 +9,7 @@ module com.guicedee.rabbit {
     exports com.guicedee.rabbit.implementations.def;
 
     requires transitive io.vertx.rabbitmq;
+    requires guiced.vertx;
 
     requires com.guicedee.client;
     requires static lombok;

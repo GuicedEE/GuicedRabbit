@@ -1,6 +1,5 @@
 package com.guicedee.rabbit;
 
-import com.google.inject.Inject;
 import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.name.Names;
@@ -9,26 +8,31 @@ import com.guicedee.client.IGuiceContext;
 import com.guicedee.guicedinjection.interfaces.IGuicePreDestroy;
 import com.guicedee.guicedservlets.websockets.options.CallScopeProperties;
 import com.guicedee.guicedservlets.websockets.options.CallScopeSource;
+import com.guicedee.rabbit.implementations.def.RabbitMQClientProvider;
 import com.guicedee.rabbit.support.TransactedMessageConsumer;
+import io.github.classgraph.ClassInfoList;
+import io.vertx.core.json.JsonObject;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQConsumer;
+import lombok.Getter;
 import lombok.extern.java.Log;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 
 import static com.guicedee.rabbit.implementations.RabbitPostStartup.toOptions;
 
 @Log
-public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuicePreDestroy<RabbitMQConsumerProvider>
-{
-    @Inject
-    private RabbitMQClient client;
+public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuicePreDestroy<RabbitMQConsumerProvider> {
+    private RabbitMQClientProvider client;
 
+    @Getter
     private final QueueDefinition queueDefinition;
+    @Getter
     private final Class<? extends QueueConsumer> clazz;
 
     private QueueConsumer queueConsumer = null;
@@ -36,240 +40,256 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
 
     private String routingKey;
     private String exchange;
+    private final CompletableFuture<Boolean> exchangeFuture;
 
     //CompletableFuture<Void> future = new CompletableFuture<>().newIncompleteFuture();
-    public static List<CompletableFuture<Void>> consumerCreated = new ArrayList<>();
+    //public static List<CompletableFuture<Void>> consumerCreated = new ArrayList<>();
 
-    public RabbitMQConsumerProvider(QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz, String routingKey, String exchange)
-    {
+    public RabbitMQConsumerProvider(RabbitMQClientProvider client, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz,
+                                    String routingKey, String exchange, CompletableFuture<Boolean> exchangeFuture) {
+        this.client = client;
         this.queueDefinition = queueDefinition;
         this.clazz = clazz;
         this.routingKey = routingKey;
         this.exchange = exchange;
+        this.exchangeFuture = exchangeFuture;
+       /* this.client.get().addConnectionEstablishedCallback((connectionEstablished) -> {
+            exchangeFuture.whenCompleteAsync((result, error) -> {
+                if (error != null) {
+                    log.log(Level.SEVERE, error.getMessage(), error);
+                } else {
+                    createQueue(client.get(), null, this.exchange);
+                }
+            });
+        });*/
     }
 
-    @Inject
-    void setup()
-    {
+    public void createQueue(RabbitMQClient rabbitMQClient, ClassInfoList queueConsumers, String exchangeName) {
+
+        QueueDefinition queueDefinition = clazz
+                .getAnnotation(QueueDefinition.class);
+        if (queueDefinition == null) {
+            throw new RuntimeException("Queue definition not found for queue class - " + clazz.getName());
+        }
+        JsonObject queueConfig = new JsonObject();
         if (queueDefinition.options()
-                           .autobind())
-        {
-            log.config("Setting up queue consumer - " + clazz.getSimpleName() + " - " + queueDefinition.value());
-            buildConsumer();
+                .ttl() != 0) {
+            queueConfig.put("x-message-ttl", queueDefinition.options()
+                    .ttl() + "");
         }
-        else
-        {
-            log.warning("Queue consumer not being created on definition. To consume queue make sure to call binding");
+        if (queueDefinition.options()
+                .singleConsumer()) {
+            queueConfig.put("x-single-active-consumer", true);
         }
+        rabbitMQClient.queueDeclare(queueDefinition.value(),
+                queueDefinition.options()
+                        .durable(),
+                queueDefinition.options()
+                        .consumerExclusive(),
+                queueDefinition.options()
+                        .delete(),
+                queueConfig,
+                result -> {
+                    if (result.succeeded()) {
+                    //    String routingKey = exchangeName + "_" + queueDefinition.value();
+                        Map<String, Object> arguments = new HashMap<>();
+                        //CompletableFuture<Void> completableFuture = new CompletableFuture<>().newIncompleteFuture();
+                        //    queueBindingFutures.add(completableFuture);
+                        //then bind the queue
+                        rabbitMQClient.queueBind(queueDefinition.value(), exchangeName, routingKey, arguments, onResult -> {
+                            if (onResult.succeeded()) {
+                                log.config("Bound queue [" + queueDefinition.value() + "] successfully");
+                                if (queueConsumer == null) {
+                                    createConsumer();
+                                }
+                            } else {
+                                log.log(Level.SEVERE, "Cannot bind queue ", onResult.cause());
+                            }
+                        //    completableFuture.complete(null);
+                        });
+                    }
+                }
+        );
+
     }
 
-    private void buildConsumer()
-    {
-        if (!client.isConnected())
-        {
-            client.addConnectionEstablishedCallback((connectionEstablished) -> {
-                if (queueConsumer != null)
-                {
+
+    private void buildConsumer() {
+        if (!client.get().isConnected()) {
+            client.get().addConnectionEstablishedCallback((connectionEstablished) -> {
+                if (queueConsumer != null) {
                     createConsumer();
                 }
             });
-        }
-        else
-        {
+        } else {
             createConsumer();
         }
     }
 
     @Override
-    public QueueConsumer get()
-    {
-        if (queueConsumer == null)
-        {
+    public QueueConsumer get() {
+        if (queueConsumer == null) {
             buildConsumer();
-        }
-        try
-        {
-            CompletableFuture.allOf(consumerCreated.toArray(new CompletableFuture[0]))
-                             .get();
-        }
-        catch (InterruptedException | ExecutionException e)
-        {
-            throw new RuntimeException(e);
         }
         return queueConsumer;
     }
 
-    private void createConsumer()
-    {
-        CompletableFuture<Void> future = new CompletableFuture<>().newIncompleteFuture();
-        consumerCreated.add(future);
-        client.basicConsumer(queueDefinition.value(), toOptions(this.queueDefinition.options()), (event) -> {
-            if (event.succeeded())
-            {
-                consumer = event.result();
-                consumer.setQueueName(queueDefinition.value());
-                consumer = consumer.fetch(queueDefinition.options()
-                                                         .fetchCount());
+//private boolean consumersCreated = false;
 
-                if (queueDefinition.options()
-                                   .transacted())
-                {
-                    IGuiceContext.instance().getLoadingFinished().thenRunAsync(() -> {
-                        TransactedMessageConsumer tmc = IGuiceContext.get(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value())));
-                        tmc.setQueueDefinition(queueDefinition);
-                        tmc.setClazz(clazz);
-                    });
-                }
+    private static Set<String> consumersCreated = new HashSet<>();
 
-                consumer.handler((message) -> {
-                    try
-                    {
-                        IGuiceContext.instance().getLoadingFinished().thenRunAsync(() -> {
-                            CompletableFuture.allOf(consumerCreated.toArray(new CompletableFuture[0])).whenComplete((a,e)->{
-                                CallScoper scoper = IGuiceContext.get(CallScoper.class);
-                                scoper.enter();
-                                CallScopeProperties properties = IGuiceContext.get(CallScopeProperties.class);
-                                properties.setSource(CallScopeSource.RabbitMQ);
-                                try
-                                {
-                                    if (queueDefinition.options()
-                                                       .transacted())
-                                    {
-                                        TransactedMessageConsumer transactedMessageConsumer = IGuiceContext.get(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value())));
-                                        transactedMessageConsumer.setQueueDefinition(queueDefinition);
-                                        try
-                                        {
-                                            transactedMessageConsumer.execute(clazz, message);
-                                            if (!queueDefinition.options()
-                                                                .autoAck())
-                                            {
-                                                client.basicAck(message.envelope()
-                                                                       .getDeliveryTag(), false, asyncResult -> {
-                                                    if(asyncResult.succeeded())
-                                                    {
-                                                        log.fine("Message Acknowledged Successfully");
-                                                    }else
-                                                    {
-                                                        log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
-                                                    }
-                                                });
+    private void createConsumer() {
+     /*   if (consumersCreated) {
+            log.warning("second attempt at making connections");
+            return;
+        }
+        consumersCreated = true;
+*/
+        // CompletableFuture<Void> future = new CompletableFuture<>().newIncompleteFuture();
+        //    consumerCreated.add(future);
+        for (int i = 0; i < this.queueDefinition.options().consumerCount(); i++) {
+            var opts = toOptions(this.queueDefinition.options());
+            opts.setConsumerTag(this.routingKey + "_consumer" + (i + 1));
+
+            if(consumersCreated.contains(opts.getConsumerTag())) {
+                continue;
+            }else {
+                consumersCreated.add(opts.getConsumerTag());
+            }
+
+            client.get().basicConsumer(queueDefinition.value(),
+                    opts,
+                    (event) -> {
+                        if (event.succeeded()) {
+                            consumer = event.result();
+                            consumer.setQueueName(queueDefinition.value());
+                            consumer = consumer.fetch(queueDefinition.options()
+                                    .fetchCount());
+
+                            if (queueDefinition.options()
+                                    .transacted()) {
+                                IGuiceContext.instance().getLoadingFinished().thenRunAsync(() -> {
+                                    TransactedMessageConsumer tmc = IGuiceContext.get(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value())));
+                                    tmc.setQueueDefinition(queueDefinition);
+                                    tmc.setClazz(clazz);
+                                });
+                            }
+
+                            consumer.handler((message) -> {
+                                try {
+                                    //  IGuiceContext.instance().getLoadingFinished().thenRunAsync(() -> {
+                                    // CompletableFuture.allOf(consumerCreated.toArray(new CompletableFuture[0])).whenComplete((a, e) -> {
+                                    CallScoper scoper = IGuiceContext.get(CallScoper.class);
+                                    scoper.enter();
+                                    CallScopeProperties properties = IGuiceContext.get(CallScopeProperties.class);
+                                    properties.setSource(CallScopeSource.RabbitMQ);
+                                    try {
+                                        if (queueDefinition.options()
+                                                .transacted()) {
+                                            TransactedMessageConsumer transactedMessageConsumer = IGuiceContext.get(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value())));
+                                            transactedMessageConsumer.setQueueDefinition(queueDefinition);
+                                            try {
+                                                transactedMessageConsumer.execute(clazz, message);
+                                                if (!queueDefinition.options()
+                                                        .autoAck()) {
+                                                    client.get().basicAck(message.envelope()
+                                                            .getDeliveryTag(), false, asyncResult -> {
+                                                        if (asyncResult.succeeded()) {
+                                                            log.fine("Message Acknowledged Successfully");
+                                                        } else {
+                                                            log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
+                                                        }
+                                                    });
+                                                }
+                                            } catch (Throwable T) {
+                                                if (!queueDefinition.options()
+                                                        .autoAck()) {
+                                                    client.get().basicNack(message.envelope()
+                                                            .getDeliveryTag(), false, false, asyncResult -> {
+                                                        if (asyncResult.succeeded()) {
+                                                            log.fine("Message NAcknowledged Successfully");
+                                                        } else {
+                                                            log.log(Level.SEVERE, "Message NAcknowledged Failed", asyncResult.cause());
+                                                        }
+                                                    });
+                                                }
+                                                log.log(Level.SEVERE, "ERROR processing of transacted message", T);
                                             }
-                                        }catch (Throwable T)
-                                        {
-                                            if (!queueDefinition.options()
-                                                                .autoAck())
-                                            {
-                                                client.basicNack(message.envelope()
-                                                                        .getDeliveryTag(), false,false, asyncResult -> {
-                                                    if(asyncResult.succeeded())
-                                                    {
-                                                        log.fine("Message NAcknowledged Successfully");
-                                                    }else
-                                                    {
-                                                        log.log(Level.SEVERE, "Message NAcknowledged Failed", asyncResult.cause());
-                                                    }
-                                                });
+                                            if (queueConsumer == null) {
+                                                queueConsumer = transactedMessageConsumer.getQueueConsumer();
                                             }
-                                            log.log(Level.SEVERE,"ERROR processing of transacted message",T);
+                                        } else {
+                                            if (queueConsumer == null) {
+                                                queueConsumer = IGuiceContext.get(clazz);
+                                            }
+                                            try {
+                                                queueConsumer.consume(message);
+                                                if (!queueDefinition.options()
+                                                        .autoAck()) {
+                                                    client.get().basicAck(message.envelope()
+                                                            .getDeliveryTag(), false, asyncResult -> {
+                                                        if (asyncResult.succeeded()) {
+                                                            log.fine("Message Acknowledged Successfully");
+                                                        } else {
+                                                            log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
+                                                        }
+                                                    });
+
+                                                }
+                                            } catch (Throwable e2) {
+                                                log.log(Level.SEVERE, "Error while creating consumer - " + clazz.getSimpleName(), e2);
+                                                if (!queueDefinition.options()
+                                                        .autoAck()) {
+                                                    client.get().basicNack(message.envelope()
+                                                            .getDeliveryTag(), false, false, asyncResult -> {
+                                                        if (asyncResult.succeeded()) {
+                                                            log.fine("Message Acknowledged Successfully");
+                                                        } else {
+                                                            log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
+                                                        }
+                                                    });
+                                                }
+                                                throw new RuntimeException(e2);
+                                            }
                                         }
-                                        if (queueConsumer == null)
-                                        {
-                                            queueConsumer = transactedMessageConsumer.getQueueConsumer();
-                                        }
+                                    } finally {
+                                        scoper.exit();
                                     }
-                                    else
-                                    {
-                                        if (queueConsumer == null)
-                                        {
-                                            queueConsumer = IGuiceContext.get(clazz);
-                                        }
-                                        try
-                                        {
-                                            queueConsumer.consume(message);
-                                            if (!queueDefinition.options()
-                                                                .autoAck())
-                                            {
-                                                client.basicAck(message.envelope()
-                                                                       .getDeliveryTag(), false, asyncResult -> {
-                                                    if(asyncResult.succeeded())
-                                                    {
-                                                        log.fine("Message Acknowledged Successfully");
-                                                    }else
-                                                    {
-                                                        log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
-                                                    }
-                                                });
-
-                                            }
-                                        }
-                                        catch (Throwable e2)
-                                        {
-                                            log.log(Level.SEVERE, "Error while creating consumer - " + clazz.getSimpleName(), e2);
-                                            if (!queueDefinition.options()
-                                                                .autoAck())
-                                            {
-                                                client.basicNack(message.envelope()
-                                                                        .getDeliveryTag(), false,false, asyncResult -> {
-                                                    if(asyncResult.succeeded())
-                                                    {
-                                                        log.fine("Message Acknowledged Successfully");
-                                                    }else
-                                                    {
-                                                        log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
-                                                    }
-                                                });
-                                            }
-                                            throw new RuntimeException(e2);
-                                        }
-                                    }
-                                }
-                                finally
-                                {
-                                    scoper.exit();
+                                    //  });
+                                    //  });
+                                } catch (Throwable e) {
+                                    log.log(Level.SEVERE, "Error while creating consumer", e);
+                                    throw new RuntimeException(e);
                                 }
                             });
-                        });
-                    }
-                    catch (Throwable e)
-                    {
-                        log.log(Level.SEVERE, "Error while creating consumer", e);
-                        throw new RuntimeException(e);
-                    }
-                });
-                future.complete(null);
-            }
-            else
-            {
-                log.log(Level.SEVERE, "Could not bind rabbit mq consumer on queue [" + queueDefinition.value() + "]", event.cause());
-                future.complete(null);
-            }
+                            //  future.complete(null);
+                        } else {
+                            log.log(Level.SEVERE, "Could not bind rabbit mq consumer on queue [" + queueDefinition.value() + "]", event.cause());
+                            //   future.complete(null);
+                        }
 
-        });
+                    });
+        } // end of consumer count loop
     }
 
-    public void pause()
-    {
+    public void pause() {
         consumer.pause();
     }
 
-    public void resume()
-    {
+    public void resume() {
         consumer.resume();
     }
 
     @Override
-    public void onDestroy()
-    {
-        if (consumer != null)
-        {
+    public void onDestroy() {
+        if (consumer != null) {
             log.config("Shutting down consumer - " + clazz.getSimpleName());
             consumer.cancel();
         }
     }
 
     @Override
-    public Integer sortOrder()
-    {
+    public Integer sortOrder() {
         return 25;
     }
 }

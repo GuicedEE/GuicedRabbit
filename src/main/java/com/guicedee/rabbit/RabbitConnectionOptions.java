@@ -51,6 +51,7 @@ public @interface RabbitConnectionOptions
     boolean includeProperties() default true;
 
     boolean useNio() default false;
+
     int reconnectAttempts() default 0;
 
     long reconnectInterval() default 0;
@@ -60,4 +61,6 @@ public @interface RabbitConnectionOptions
     String[] applicationLayerProtocols() default {};
 
     boolean registerWriteHandler() default true;
+
+    boolean confirmPublishes() default true;
 }

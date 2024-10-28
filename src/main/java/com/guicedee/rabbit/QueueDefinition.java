@@ -25,4 +25,5 @@ public @interface QueueDefinition
      * @return The name of the exchange to bind to, defaults to the original name
      */
     String exchange() default "default";
+
 }

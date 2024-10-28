@@ -116,4 +116,19 @@ public class QueueOptionsDefault implements QueueOptions
     {
         return autobind;
     }
+
+    @Override
+    public int consumerCount() {
+        return 1;
+    }
+
+    @Override
+    public boolean dedicatedChannel() {
+        return false;
+    }
+
+    @Override
+    public boolean dedicatedConnection() {
+        return false;
+    }
 }
