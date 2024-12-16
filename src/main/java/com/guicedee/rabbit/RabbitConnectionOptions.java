@@ -62,5 +62,5 @@ public @interface RabbitConnectionOptions
 
     boolean registerWriteHandler() default true;
 
-    boolean confirmPublishes() default true;
+    boolean confirmPublishes() default false;
 }
