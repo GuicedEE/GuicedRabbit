@@ -81,6 +81,10 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                 .singleConsumer()) {
             queueConfig.put("x-single-active-consumer", true);
         }
+        if (queueDefinition.options()
+                .priority() != 0) {
+            queueConfig.put("x-max-priority", queueDefinition.options().priority());
+        }
         rabbitMQClient.queueDeclare(queueDefinition.value(),
                 queueDefinition.options()
                         .durable(),
@@ -107,6 +111,8 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                             }
                         //    completableFuture.complete(null);
                         });
+                    }else {
+                        log.log(Level.SEVERE, "Cannot bind queue ", result.cause());
                     }
                 }
         );

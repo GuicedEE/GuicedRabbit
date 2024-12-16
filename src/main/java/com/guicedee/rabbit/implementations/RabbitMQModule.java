@@ -196,9 +196,6 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                         } else {
                             queueRoutingKey = exchangeName + "_" + named.value();
                         }
-                        if (queueName.equalsIgnoreCase("StaffTimeSheetOptionsToWeb")) {
-                            System.out.println("heee");
-                        }
                         if (queuePublishers.containsKey(queueRoutingKey)) {
                             continue;
                         }
