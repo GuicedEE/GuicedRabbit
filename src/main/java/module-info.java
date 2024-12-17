@@ -16,6 +16,7 @@ module com.guicedee.rabbit {
 
     requires com.rabbitmq.client;
     requires jakarta.transaction;
+    requires io.github.classgraph;
 
     provides IGuicePostStartup with RabbitPostStartup;
     provides IGuiceModule with RabbitMQModule;

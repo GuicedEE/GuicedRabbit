@@ -52,10 +52,10 @@ public class QueuePublisher {
 
         if (confirmPublish) {
             log.config("Message publishing to queue " + routingKey + " - " + exchangeName + " / " + body);
-            client.get().basicPublish(exchangeName, routingKey, message, pubResult -> {
+            client.get().basicPublish(exchangeName, routingKey, message).onComplete(pubResult -> {
                 if (pubResult.succeeded()) {
                     // Check the message got confirmed by the broker.
-                    client.get().waitForConfirms(waitResult -> {
+                    client.get().waitForConfirms().onComplete(waitResult -> {
                         if (waitResult.succeeded())
                             log.config("Message published to queue " + routingKey + " - " + exchangeName);
                         else

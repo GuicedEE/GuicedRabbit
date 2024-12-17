@@ -92,15 +92,16 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                         .consumerExclusive(),
                 queueDefinition.options()
                         .delete(),
-                queueConfig,
-                result -> {
-                    if (result.succeeded()) {
-                    //    String routingKey = exchangeName + "_" + queueDefinition.value();
-                        Map<String, Object> arguments = new HashMap<>();
-                        //CompletableFuture<Void> completableFuture = new CompletableFuture<>().newIncompleteFuture();
-                        //    queueBindingFutures.add(completableFuture);
-                        //then bind the queue
-                        rabbitMQClient.queueBind(queueDefinition.value(), exchangeName, routingKey, arguments, onResult -> {
+                queueConfig
+        ).onComplete(result -> {
+            if (result.succeeded()) {
+                //    String routingKey = exchangeName + "_" + queueDefinition.value();
+                Map<String, Object> arguments = new HashMap<>();
+                //CompletableFuture<Void> completableFuture = new CompletableFuture<>().newIncompleteFuture();
+                //    queueBindingFutures.add(completableFuture);
+                //then bind the queue
+                rabbitMQClient.queueBind(queueDefinition.value(), exchangeName, routingKey, arguments)
+                        .onComplete(onResult -> {
                             if (onResult.succeeded()) {
                                 log.config("Bound queue [" + queueDefinition.value() + "] successfully");
                                 if (queueConsumer == null) {
@@ -109,13 +110,12 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                             } else {
                                 log.log(Level.SEVERE, "Cannot bind queue ", onResult.cause());
                             }
-                        //    completableFuture.complete(null);
+                            //    completableFuture.complete(null);
                         });
-                    }else {
-                        log.log(Level.SEVERE, "Cannot bind queue ", result.cause());
-                    }
-                }
-        );
+            } else {
+                log.log(Level.SEVERE, "Cannot bind queue ", result.cause());
+            }
+        });
 
     }
 
@@ -157,15 +157,15 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
             var opts = toOptions(this.queueDefinition.options());
             opts.setConsumerTag(this.routingKey + "_consumer" + (i + 1));
 
-            if(consumersCreated.contains(opts.getConsumerTag())) {
+            if (consumersCreated.contains(opts.getConsumerTag())) {
                 continue;
-            }else {
+            } else {
                 consumersCreated.add(opts.getConsumerTag());
             }
 
             client.get().basicConsumer(queueDefinition.value(),
-                    opts,
-                    (event) -> {
+                            opts)
+                    .onComplete((event) -> {
                         if (event.succeeded()) {
                             consumer = event.result();
                             consumer.setQueueName(queueDefinition.value());
@@ -199,25 +199,27 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                 if (!queueDefinition.options()
                                                         .autoAck()) {
                                                     client.get().basicAck(message.envelope()
-                                                            .getDeliveryTag(), false, asyncResult -> {
-                                                        if (asyncResult.succeeded()) {
-                                                            log.fine("Message Acknowledged Successfully");
-                                                        } else {
-                                                            log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
-                                                        }
-                                                    });
+                                                                    .getDeliveryTag(), false)
+                                                            .onComplete(asyncResult -> {
+                                                                if (asyncResult.succeeded()) {
+                                                                    log.fine("Message Acknowledged Successfully");
+                                                                } else {
+                                                                    log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
+                                                                }
+                                                            });
                                                 }
                                             } catch (Throwable T) {
                                                 if (!queueDefinition.options()
                                                         .autoAck()) {
                                                     client.get().basicNack(message.envelope()
-                                                            .getDeliveryTag(), false, false, asyncResult -> {
-                                                        if (asyncResult.succeeded()) {
-                                                            log.fine("Message NAcknowledged Successfully");
-                                                        } else {
-                                                            log.log(Level.SEVERE, "Message NAcknowledged Failed", asyncResult.cause());
-                                                        }
-                                                    });
+                                                                    .getDeliveryTag(), false, false)
+                                                            .onComplete(asyncResult -> {
+                                                                if (asyncResult.succeeded()) {
+                                                                    log.fine("Message NAcknowledged Successfully");
+                                                                } else {
+                                                                    log.log(Level.SEVERE, "Message NAcknowledged Failed", asyncResult.cause());
+                                                                }
+                                                            });
                                                 }
                                                 log.log(Level.SEVERE, "ERROR processing of transacted message", T);
                                             }
@@ -233,13 +235,14 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                 if (!queueDefinition.options()
                                                         .autoAck()) {
                                                     client.get().basicAck(message.envelope()
-                                                            .getDeliveryTag(), false, asyncResult -> {
-                                                        if (asyncResult.succeeded()) {
-                                                            log.fine("Message Acknowledged Successfully");
-                                                        } else {
-                                                            log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
-                                                        }
-                                                    });
+                                                                    .getDeliveryTag(), false)
+                                                            .onComplete(asyncResult -> {
+                                                                if (asyncResult.succeeded()) {
+                                                                    log.fine("Message Acknowledged Successfully");
+                                                                } else {
+                                                                    log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
+                                                                }
+                                                            });
 
                                                 }
                                             } catch (Throwable e2) {
@@ -247,13 +250,14 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                 if (!queueDefinition.options()
                                                         .autoAck()) {
                                                     client.get().basicNack(message.envelope()
-                                                            .getDeliveryTag(), false, false, asyncResult -> {
-                                                        if (asyncResult.succeeded()) {
-                                                            log.fine("Message Acknowledged Successfully");
-                                                        } else {
-                                                            log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
-                                                        }
-                                                    });
+                                                                    .getDeliveryTag(), false, false)
+                                                            .onComplete(asyncResult -> {
+                                                                if (asyncResult.succeeded()) {
+                                                                    log.fine("Message Acknowledged Successfully");
+                                                                } else {
+                                                                    log.log(Level.SEVERE, "Message Acknowledged Failed", asyncResult.cause());
+                                                                }
+                                                            });
                                                 }
                                                 throw new RuntimeException(e2);
                                             }

@@ -101,10 +101,10 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
         ScanResult scanResult = IGuiceContext.instance()
                 .getScanResult();
         var pi = scanResult.getPackageInfo(connectionPackage);
-        ClassInfoList queueConsumers = pi.getClassInfoRecursive().filter(a->a.hasAnnotation(QueueDefinition.class));
-                //.getClassesWithAnnotation(QueueDefinition.class);
+        ClassInfoList queueConsumers = pi.getClassInfoRecursive().filter(a -> a.hasAnnotation(QueueDefinition.class));
+        //.getClassesWithAnnotation(QueueDefinition.class);
 
-        ClassInfoList exchangeAnnotations = pi.getClassInfoRecursive().filter(a->a.hasAnnotation(QueueExchange.class));
+        ClassInfoList exchangeAnnotations = pi.getClassInfoRecursive().filter(a -> a.hasAnnotation(QueueExchange.class));
 
         if (!rabbitMQClient.isConnected()) {
             rabbitMQClient.addConnectionEstablishedCallback(promise -> {
@@ -129,13 +129,14 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
             } else this.exchanges.add(exchangeName);
 
             if (connectionOptions.confirmPublishes()) {
-                client.confirmSelect(confirmResult -> {
-                    if (confirmResult.succeeded()) {
-                        log.config("Configured Publisher Confirmation on connection [" + connectionOptions.value() + "]");
-                    } else {
-                        log.log(Level.WARNING, "Configured Publisher Confirmation on connection [" + connectionOptions.value() + "]", confirmResult.cause());
-                    }
-                });
+                client.confirmSelect()
+                        .onComplete(confirmResult -> {
+                            if (confirmResult.succeeded()) {
+                                log.config("Configured Publisher Confirmation on connection [" + connectionOptions.value() + "]");
+                            } else {
+                                log.log(Level.WARNING, "Configured Publisher Confirmation on connection [" + connectionOptions.value() + "]", confirmResult.cause());
+                            }
+                        });
             }
 
             if (queueExchange.createDeadLetter()) {
@@ -143,16 +144,17 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
                 config.put("x-dead-letter-exchange", deadLetter);
                 //declare dead letter
                 rabbitMQClient.exchangeDeclare(deadLetter, queueExchange.exchangeType()
-                        .toString(), queueExchange.durable(), queueExchange.autoDelete(), onResult -> {
-                    if (onResult.succeeded()) {
+                                .toString(), queueExchange.durable(), queueExchange.autoDelete())
+                        .onComplete(onResult -> {
+                            if (onResult.succeeded()) {
 
-                        log.config("Dead Letter Exchange successfully declared - " + deadLetter);
-                        config.put("alternate-exchange", exchangeName);
-                        rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
-                                        .toString(), queueExchange.durable(),
-                                queueExchange.autoDelete(),
-                                config,
-                                exchangeDeclared -> {
+                                log.config("Dead Letter Exchange successfully declared - " + deadLetter);
+                                config.put("alternate-exchange", exchangeName);
+                                rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
+                                                .toString(), queueExchange.durable(),
+                                        queueExchange.autoDelete(),
+                                        config
+                                ).onComplete(exchangeDeclared -> {
                                     if (exchangeDeclared.succeeded()) {
                                         log.info("Exchange [" + exchangeName + "] successfully declared with Dead Letter Exchange [" + deadLetter + "]");
                                         Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
@@ -185,28 +187,29 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
                                     }
                                     //        rabbitMQClientStarted.complete(null);
                                 });
-                        exchangeDeclared.complete(true);
-                    } else {
-                        log.log(Level.SEVERE, "Cannot create dead letter queue", onResult.cause());
-                        exchangeDeclared.complete(false);
-                    }
+                                exchangeDeclared.complete(true);
+                            } else {
+                                log.log(Level.SEVERE, "Cannot create dead letter queue", onResult.cause());
+                                exchangeDeclared.complete(false);
+                            }
 
-                });
+                        });
             } else {
                 rabbitMQClient.exchangeDeclare(exchangeName, queueExchange.exchangeType()
-                        .toString(), queueExchange.durable(), queueExchange.autoDelete(), exchangeDeclared -> {
-                    if (exchangeDeclared.succeeded()) {
-                        log.info("Exchange successfully declared with config - " + exchangeName);
-                        Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
-                        onQueueExchange.forEach(a -> a.perform(client, exchangeName));
-                        this.exchangeDeclared.complete(true);
-                        // createQueue(rabbitMQClient, queueConsumers, exchangeName);
-                    } else {
-                        log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
-                        this.exchangeDeclared.complete(false);
-                    }
-                    //   rabbitMQClientStarted.complete(null);
-                });
+                                .toString(), queueExchange.durable(), queueExchange.autoDelete())
+                        .onComplete(exchangeDeclared -> {
+                            if (exchangeDeclared.succeeded()) {
+                                log.info("Exchange successfully declared with config - " + exchangeName);
+                                Set<OnQueueExchangeDeclared> onQueueExchange = IGuiceContext.loaderToSetNoInjection(ServiceLoader.load(OnQueueExchangeDeclared.class));
+                                onQueueExchange.forEach(a -> a.perform(client, exchangeName));
+                                this.exchangeDeclared.complete(true);
+                                // createQueue(rabbitMQClient, queueConsumers, exchangeName);
+                            } else {
+                                log.log(Level.SEVERE, "Cannot create exchange ", exchangeDeclared.cause());
+                                this.exchangeDeclared.complete(false);
+                            }
+                            //   rabbitMQClientStarted.complete(null);
+                        });
             }
         }
 
@@ -216,7 +219,7 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
     @Override
     public void onDestroy() {
         if (client != null && client.isConnected()) {
-            client.stop((a) -> {
+            client.stop().onComplete((a) -> {
                 log.config("Rabbit MQ Client Shutdown");
             });
         }
