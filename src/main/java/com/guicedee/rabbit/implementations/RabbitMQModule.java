@@ -170,6 +170,19 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             RabbitConnectionOptions connectionOption = clientConnection.loadClass()
                     .getAnnotation(RabbitConnectionOptions.class);
             boolean confirmPublishes = connectionOption.confirmPublishes();
+            if (confirmPublishes) {
+                clientProvider.getExchangeDeclared().thenAccept(exchangeDeclared -> {
+                    clientProvider.getClient()
+                            .confirmSelect().onComplete((result,error)->{
+                                if (error != null) {
+                                    log.log(Level.SEVERE,"Cannot set connection publishes watch - " + connectionOption.value() + " - " + error.getMessage());
+                                }else {
+                                    log.config("Connection " + connectionOption.value() + " has confirm publishes enabled");
+                                }
+                            });
+                });
+
+            }
 
             var ci = scanResult.getPackageInfo(clientConnection.getPackageName()).getClassInfoRecursive();
             var exchanges = ci.stream().filter(a -> a.hasAnnotation(QueueExchange.class)).toList();
