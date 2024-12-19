@@ -42,6 +42,9 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
 
     private List<ClassInfo> queuePublisherNames(ClassInfoList packageClasses) {
         Set<ClassInfo> boundKeys = new HashSet<>();
+        if (packageClasses.contains("za.co.uweassist.barcode.server")) {
+            System.out.println("here");
+        }
         for (ClassInfo classThatMay : packageClasses) {
             Class<?> aClass = classThatMay.loadClass(true);
             if (!getPublisherField(classThatMay).isEmpty()) {
@@ -57,10 +60,12 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             if (!fieldInfo.isFinal() && !fieldInfo.isStatic()) {
                 try {
                     Field declaredField = aClass.loadClass().getDeclaredField(fieldInfo.getName());
-                    if (declaredField.isAnnotationPresent(Inject.class) &&
-                            declaredField.isAnnotationPresent(Named.class) &&
-                            QueuePublisher.class.isAssignableFrom(declaredField.getType())) {
-                        Named annotation = declaredField.getAnnotation(Named.class);
+
+                    if (
+                            (declaredField.isAnnotationPresent(Inject.class) || declaredField.isAnnotationPresent(com.google.inject.Inject.class)) &&
+                                    (declaredField.isAnnotationPresent(Named.class) || declaredField.isAnnotationPresent(com.google.inject.name.Named.class))
+                    ) {
+                       // Named annotation = declaredField.getAnnotation(Named.class);
                         fields.add(declaredField);
                         /*    String routingKey = queueExchangeName + "_" + annotation.value();
                             if (!routingKeysUsed.contains(routingKey)) {
@@ -81,7 +86,6 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
 
     }
 
-
     @Override
     protected void configure() {
         ScanResult scanResult = IGuiceContext.instance()
@@ -92,7 +96,11 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
         //break up per connection name
         ClassInfoList clientConnections = scanResult.getClassesWithAnnotation(RabbitConnectionOptions.class);
         boolean defaultBound = false;
+
+        List<ClassInfo> queueConsumers = null;
+
         for (ClassInfo clientConnection : clientConnections) {
+
             RabbitConnectionOptions connectionOption = clientConnection.loadClass()
                     .getAnnotation(RabbitConnectionOptions.class);
             RabbitMQClientProvider clientProvider = new RabbitMQClientProvider(toOptions(connectionOption), connectionOption, clientConnection.getPackageName());
@@ -137,8 +145,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                 exchangeClients.put(exchangeName, clientProvider);
 
                 var exchangePackageClasses = exchange.getPackageInfo().getClassInfoRecursive();
-                var queueConsumers = exchangePackageClasses.stream().filter(a -> a.hasAnnotation(QueueDefinition.class)).toList();
-
+                queueConsumers = exchangePackageClasses.stream().filter(a -> a.hasAnnotation(QueueDefinition.class)).toList();
                 for (ClassInfo queueConsumerClass : queueConsumers) {
                     Class<QueueConsumer> aClass = (Class<QueueConsumer>) queueConsumerClass.loadClass();
                     if (completedConsumers.contains(aClass)) {
@@ -184,17 +191,23 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                 for (ClassInfo classWithPublisher : queuePublisherNames(exchangePackageClasses)) {
                     var fields = getPublisherField(classWithPublisher);
                     for (Field field : fields) {
-                        var named = field.getAnnotation(Named.class);
+                        String named = null;
+                        if (field.isAnnotationPresent(Named.class)) {
+                         named = field.getAnnotation(Named.class).value();
+                        }
+                        else
+                            named = field.getAnnotation(com.google.inject.name.Named.class).value();
+
                         var qd = field.getAnnotation(QueueDefinition.class);
                         String queueExchangeName = exchangeName;
-                        String queueName = qd != null ? qd.value() : named.value();
+                        String queueName = qd != null ? qd.value() : named;
                         String queueRoutingKey = queueName;
                         if (qd != null) {
                             exchangeName = qd.exchange();
                             queueExchangeName = exchangeName;
                             queueRoutingKey = exchangeName + "_" + qd.value();
                         } else {
-                            queueRoutingKey = exchangeName + "_" + named.value();
+                            queueRoutingKey = exchangeName + "_" + named;
                         }
                         if (queuePublishers.containsKey(queueRoutingKey)) {
                             continue;
@@ -211,7 +224,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                         if (qd != null) {
                             rabbitMQQueuePublisherProvider = new RabbitMQQueuePublisherProvider(queueClientProvider, qd, queueExchangeName, queueRoutingKey, confirmPublishes);
                         } else {
-                            rabbitMQQueuePublisherProvider = new RabbitMQQueuePublisherProvider(queueClientProvider, named.value(), queueExchangeName, queueRoutingKey, confirmPublishes);
+                            rabbitMQQueuePublisherProvider = new RabbitMQQueuePublisherProvider(queueClientProvider, named, queueExchangeName, queueRoutingKey, confirmPublishes);
                         }
 
                         RabbitMQModule.queuePublishers.put(queueName, rabbitMQQueuePublisherProvider);
