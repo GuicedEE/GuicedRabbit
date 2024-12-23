@@ -42,9 +42,6 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
 
     private List<ClassInfo> queuePublisherNames(ClassInfoList packageClasses) {
         Set<ClassInfo> boundKeys = new HashSet<>();
-        if (packageClasses.contains("za.co.uweassist.barcode.server")) {
-            System.out.println("here");
-        }
         for (ClassInfo classThatMay : packageClasses) {
             Class<?> aClass = classThatMay.loadClass(true);
             if (!getPublisherField(classThatMay).isEmpty()) {
@@ -60,30 +57,19 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             if (!fieldInfo.isFinal() && !fieldInfo.isStatic()) {
                 try {
                     Field declaredField = aClass.loadClass().getDeclaredField(fieldInfo.getName());
-
                     if (
                             (declaredField.isAnnotationPresent(Inject.class) || declaredField.isAnnotationPresent(com.google.inject.Inject.class)) &&
                                     (declaredField.isAnnotationPresent(Named.class) || declaredField.isAnnotationPresent(com.google.inject.name.Named.class))
                     ) {
-                       // Named annotation = declaredField.getAnnotation(Named.class);
                         fields.add(declaredField);
-                        /*    String routingKey = queueExchangeName + "_" + annotation.value();
-                            if (!routingKeysUsed.contains(routingKey)) {
-                                bind(Key.get(QueuePublisher.class, Names.named(annotation.value())))
-                                        .toProvider(new RabbitMQQueuePublisherProvider(annotation.value(), queueExchangeName, routingKey)).in(Singleton.class);
-                            }*/
                     }
-                } catch (Throwable e) {
+                } catch (NoSuchFieldException | IllegalAccessError e) {
                     //   e.printStackTrace();
                     //field not declared
                 }
             }
         }
         return fields;
-    }
-
-    public void registerQueueConsumer(String queueName, String exchangeName, String routingKey, QueueDefinition queueDefinition) {
-
     }
 
     @Override
@@ -260,17 +246,8 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                     .add(consumer);
             Class<? extends QueueConsumer> aClass = consumer.getClazz();
             bind(Key.get(aClass)).in(Singleton.class);
-            //   bind(Key.get(aClass,Names.named(consumer.getQueueDefinition().value()))).in(Singleton.class);
             bind(Key.get(TransactedMessageConsumer.class, Names.named(consumer.getQueueDefinition().value()))).to(TransactedMessageConsumer.class).in(Singleton.class);
             bind(Key.get(QueueConsumer.class, Names.named(consumer.getQueueDefinition().value()))).to(consumer.getClazz()).in(Singleton.class);
-
-            /*if (consumer.getQueueDefinition().options()
-                    .autobind()) {
-                bind(Key.get(QueueConsumer.class, Names.named(consumer.getQueueDefinition().value()))).toProvider(consumer)
-                        .asEagerSingleton();
-            } else {
-                bind(Key.get(QueueConsumer.class, Names.named(consumer.getQueueDefinition().value()))).toProvider(consumer);
-            }*/
         });
 
 
@@ -278,89 +255,6 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             bind(Key.get(QueuePublisher.class, Names.named(publisher.getQueueDefinition().value())))
                     .toProvider(publisher).in(Singleton.class);
         });
-/*
-        ClassInfoList queues = scanResult.getClassesWithAnnotation(QueueDefinition.class);
-        ClassInfoList exchangeAnnotations = scanResult.getClassesWithAnnotation(QueueExchange.class);
-
-        String queueExchangeName = "default";
-        Set<String> routingKeysUsed = new HashSet<>();
-        //bind the queues with their names to a RabbitMQConsumer
-        for (ClassInfo queueClassInfo : queues) {
-            Class<?> clazz = queueClassInfo.loadClass();
-            Class<QueueConsumer> aClass = (Class<QueueConsumer>) clazz;
-            QueueDefinition queueDefinition = aClass.getAnnotation(QueueDefinition.class);
-            if (queueDefinition.exchange()
-                    .equals("default") || exchangeAnnotations.size() == 1) {
-                QueueExchange annotation = exchangeAnnotations.stream()
-                        .findFirst()
-                        .orElseThrow(() -> new RuntimeException("No @QueueExchange Declared for Connection - " + queueDefinition.value()))
-                        .loadClass()
-                        .getAnnotation(QueueExchange.class);
-                queueExchangeName = annotation.value();
-            }
-            String routingKey = queueExchangeName + "_" + queueDefinition.value();
-            String consumerCounter = "";
-            //==== CONSUMERS =======
-            String routingKeyCounted = routingKey + consumerCounter;
-         //   RabbitMQConsumerProvider provider = new RabbitMQConsumerProvider(queueDefinition, aClass, routingKey, queueExchangeName);
-
-        //    IGuiceContext.instance()
-        //            .loadPreDestroyServices()
-        //            .add(provider);
-
-          //  bind(Key.get(aClass));
-          //  bind(Key.get(aClass, Names.named(queueDefinition.value()))).to(aClass).in(Singleton.class);
-       //     bind(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value()))).to(TransactedMessageConsumer.class).in(Singleton.class);
-
-            if (queueDefinition.options()
-                    .autobind()) {
-        //        bind(Key.get(QueueConsumer.class, Names.named(queueDefinition.value()))).toProvider(provider)
-       //                 .asEagerSingleton();
-            } else {
-          //      bind(Key.get(QueueConsumer.class, Names.named(queueDefinition.value()))).toProvider(provider);
-            }
-            if (!routingKeysUsed.contains(routingKey)) {
-                routingKeysUsed.add(routingKey);
-                //  RabbitMQQueuePublisherProvider rabbitMQQueuePublisherProvider = new RabbitMQQueuePublisherProvider(queueDefinition, queueExchangeName, routingKey);
-                //  bind(Key.get(QueuePublisher.class, Names.named(queueDefinition.value())))
-                //          .toProvider(rabbitMQQueuePublisherProvider).in(Singleton.class);
-                //   IGuiceContext.instance()
-                //          .loadPreDestroyServices()
-                //          .add(rabbitMQQueuePublisherProvider);
-            }
-
-        }
-
-        Set<String> boundKeys = new HashSet<>();
-        for (ClassInfo classThatMay : scanResult.getAllClasses()) {
-            Class<?> aClass = classThatMay.loadClass(true);
-            for (FieldInfo fieldInfo : classThatMay.getFieldInfo()) {
-                if (!fieldInfo.isFinal() && !fieldInfo.isStatic()) {
-                    try {
-                        Field declaredField = aClass.getDeclaredField(fieldInfo.getName());
-                        if (declaredField.isAnnotationPresent(Inject.class) &&
-                                declaredField.isAnnotationPresent(Named.class) &&
-                                QueuePublisher.class.isAssignableFrom(declaredField.getType())) {
-                            Named annotation = declaredField.getAnnotation(Named.class);
-                            if (boundKeys.contains(annotation.value())) {
-                                continue;
-                            } else {
-                                boundKeys.add(annotation.value());
-                            }
-
-                            String routingKey = queueExchangeName + "_" + annotation.value();
-                            if (!routingKeysUsed.contains(routingKey)) {
-                                //   bind(Key.get(QueuePublisher.class, Names.named(annotation.value())))
-                                //              .toProvider(new RabbitMQQueuePublisherProvider(annotation.value(), queueExchangeName, routingKey)).in(Singleton.class);
-                            }
-                        }
-                    } catch (Throwable e) {
-                        //   e.printStackTrace();
-                        //field not declared
-                    }
-                }
-            }*/
-        //}
     }
 
     private RabbitMQOptions toOptions(RabbitConnectionOptions options) {
