@@ -54,7 +54,7 @@
         </dependency>
 
         <dependency>
-            <groupId>com.guicedee.servlets</groupId>
+            <groupId>com.guicedee</groupId>
             <artifactId>guiced-rest-services</artifactId>
         </dependency>
 
@@ -64,9 +64,8 @@
         </dependency>
 
         <dependency>
-            <groupId>com.guicedee.servlets</groupId>
+            <groupId>com.guicedee</groupId>
             <artifactId>guiced-vertx</artifactId>
-            <scope>test</scope>
         </dependency>
 
         <dependency>
@@ -82,10 +81,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.guicedee.servlets</groupId>
+            <groupId>com.guicedee</groupId>
             <artifactId>guiced-vertx</artifactId>
-            <version>2.0.0-SNAPSHOT</version>
-            <scope>compile</scope>
         </dependency>
     </dependencies>
 
