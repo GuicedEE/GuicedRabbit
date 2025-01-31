@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import static com.guicedee.rabbit.implementations.RabbitPostStartup.toOptions;
@@ -279,7 +280,13 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                             });
                                             if(queueDefinition.options().singleConsumer())
                                             {
-                                                q.get();
+                                                try
+                                                {
+                                                    q.get(30, TimeUnit.SECONDS);
+                                                } catch (Exception er)
+                                                {
+                                                    log.log(Level.SEVERE,"Operation Timed Out - " + queueDefinition.value(), er);
+                                                }
                                             }
                                             if (queueConsumer == null)
                                             {
@@ -331,7 +338,13 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                         });
                                                 if(queueDefinition.options().singleConsumer())
                                                 {
-                                                    q.get();
+                                                    try
+                                                    {
+                                                        q.get(30, TimeUnit.SECONDS);
+                                                    } catch (Exception er)
+                                                    {
+                                                        log.log(Level.SEVERE,"Operation Timed Out - " + queueDefinition.value(), er);
+                                                    }
                                                 }
                                             } catch (Throwable e2)
                                             {
