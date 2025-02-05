@@ -46,11 +46,6 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
     @Getter
     private final CompletableFuture<Boolean> exchangeDeclared = new CompletableFuture<>().newIncompleteFuture();
 
-    // public static Future<Void> startQueueFuture;
-
-    //public static CompletableFuture<Void> rabbitMQClientStarted = new CompletableFuture<>().newIncompleteFuture();
-    //public static List<CompletableFuture<Void>> queueBindingFutures = new ArrayList<>();
-
     @Getter
     private RabbitMQClient client;
 
@@ -84,16 +79,6 @@ public class RabbitMQClientProvider implements Provider<RabbitMQClient>,
         }
         client = RabbitMQClient.create(vertx, options);
         configure(client);
-       /* startQueueFuture = client.start();
-        //    startQueueFuture.andThen((result) -> handle(client, result))
-        //                    .result();
-        try {
-            rabbitMQClientStarted.get();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException(e);
-        }*/
         return client;
     }
 
