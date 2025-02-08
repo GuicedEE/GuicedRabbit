@@ -272,7 +272,7 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                 {
                                                     scopeRunner.exit();
                                                 }
-                                            }).whenComplete((result, error) -> {
+                                            }).whenCompleteAsync((result, error) -> {
                                                 if (error != null)
                                                 {
                                                     log.log(Level.SEVERE, "Error processing queue transacted message", error);
@@ -282,7 +282,8 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                             {
                                                 try
                                                 {
-                                                    q.get(30, TimeUnit.SECONDS);
+                                                    log.info("Processing Synchronous - " + queueDefinition.value());
+                                               //     q.get(30, TimeUnit.SECONDS);
                                                 } catch (Exception er)
                                                 {
                                                     log.log(Level.SEVERE,"Operation Timed Out - " + queueDefinition.value(), er);
@@ -330,7 +331,7 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                                 scopeRunner.exit();
                                                             }
                                                         })
-                                                        .whenComplete((response, error) -> {
+                                                        .whenCompleteAsync((response, error) -> {
                                                             if (error != null)
                                                             {
                                                                 log.log(Level.SEVERE, "Error processing queue message", error);
@@ -340,7 +341,8 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                 {
                                                     try
                                                     {
-                                                        q.get(30, TimeUnit.SECONDS);
+                                                        log.info("Processing Synchronous - " + queueDefinition.value());
+                                                       // q.get(30, TimeUnit.SECONDS);
                                                     } catch (Exception er)
                                                     {
                                                         log.log(Level.SEVERE,"Operation Timed Out - " + queueDefinition.value(), er);
