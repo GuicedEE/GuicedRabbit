@@ -53,10 +53,6 @@
             <scope>test</scope>
         </dependency>
 
-        <dependency>
-            <groupId>com.guicedee</groupId>
-            <artifactId>guiced-rest-services</artifactId>
-        </dependency>
 
         <dependency>
             <groupId>com.guicedee.persistence</groupId>
@@ -80,10 +76,7 @@
             <version>1.19.8</version>
             <scope>test</scope>
         </dependency>
-        <dependency>
-            <groupId>com.guicedee</groupId>
-            <artifactId>guiced-vertx</artifactId>
-        </dependency>
+
     </dependencies>
 
     <build>
