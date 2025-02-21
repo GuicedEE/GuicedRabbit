@@ -23,6 +23,7 @@ import jakarta.inject.Singleton;
 import lombok.extern.java.Log;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.logging.Level;
 
@@ -51,10 +52,20 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
         return new ArrayList<>(boundKeys);
     }
 
+
+    private static boolean isFinal(Field field) {
+        return Modifier.isFinal(field.getModifiers());
+    }
+
+    private static boolean isStatic(Field field) {
+        return Modifier.isStatic(field.getModifiers());
+    }
+
+
     private List<Field> getPublisherField(ClassInfo aClass) {
         List<Field> fields = new ArrayList<>();
-        for (FieldInfo fieldInfo : aClass.getFieldInfo()) {
-            if (!fieldInfo.isFinal() && !fieldInfo.isStatic()) {
+        for (var fieldInfo : aClass.loadClass().getDeclaredFields()) {
+            if (!isFinal(fieldInfo) && !isStatic(fieldInfo)) {
                 try {
                     Field declaredField = aClass.loadClass().getDeclaredField(fieldInfo.getName());
                     if (
@@ -147,6 +158,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                     RabbitMQModule.queueConnections.put(queueName, clientProvider);
                     RabbitMQConsumerProvider provider = new RabbitMQConsumerProvider(clientProvider, queueDefinition, aClass, routingKey, exchangeName, clientProvider.getExchangeDeclared());
                     RabbitMQModule.queueConsumers.put(queueName, provider);
+                    requestInjection(provider);
                 }
             } //end of exchange binding
         }
@@ -231,11 +243,6 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                 }
             } //end of exchange binding
         }
-
-
-        Set<RabbitMQClient> declaredConnections = new HashSet<>();
-        Set<Strings> declaredExchanges = new HashSet<>();
-        Set<Strings> declaredQueues = new HashSet<>();
 
         //also per connection name
         bind(RabbitMQPublisher.class).toProvider(RabbitMQPublisherProvider.class).in(com.google.inject.Singleton.class);
