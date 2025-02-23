@@ -204,7 +204,7 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                             if (queueDefinition.options()
                                     .transacted())
                             {
-                                IGuiceContext.instance().getLoadingFinished().thenRun(() -> {
+                                IGuiceContext.instance().getLoadingFinished().onSuccess((handler) -> {
                                     TransactedMessageConsumer tmc = IGuiceContext.get(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value())));
                                     tmc.setQueueDefinition(queueDefinition);
                                     tmc.setClazz(clazz);
