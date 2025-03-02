@@ -253,7 +253,7 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
                                                     scopeRunner.enter();
                                                     try
                                                     {
-                                                        log.config("Running transacted message consumer - " + queueDefinition.value());
+                                                        log.fine("Running transacted message consumer - " + queueDefinition.value());
                                                         IGuiceContext.get(CallScopeProperties.class)
                                                                 .setProperties(properties.getProperties())
                                                                 .setSource(properties.getSource());

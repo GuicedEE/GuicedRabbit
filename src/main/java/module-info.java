@@ -1,5 +1,7 @@
 import com.guicedee.guicedinjection.interfaces.IGuiceModule;
 import com.guicedee.guicedinjection.interfaces.IGuicePostStartup;
+import com.guicedee.rabbit.implementations.RabbitMQModule;
+import com.guicedee.rabbit.implementations.RabbitPostStartup;
 
 module com.guicedee.rabbit {
     uses com.guicedee.rabbit.implementations.def.OnQueueExchangeDeclared;
