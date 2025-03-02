@@ -25,7 +25,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 import static com.guicedee.rabbit.implementations.RabbitPostStartup.toOptions;
@@ -45,7 +44,6 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
 
     private String routingKey;
     private String exchange;
-    private final CompletableFuture<Boolean> exchangeFuture;
 
     @Inject
     private Vertx vertx;
@@ -58,7 +56,29 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
     @Inject
     void setup()
     {
-        workerExecutor = vertx.createSharedWorkerExecutor("rabbit-consumer-worker-thread");
+        workerExecutor = vertx.createSharedWorkerExecutor("rabbit-consumer" + toKebabCase(getQueueDefinition().value()) + "-worker-thread");
+    }
+
+    public static String toKebabCase(String input) {
+        if (input == null || input.isEmpty()) {
+            return input;
+        }
+
+        StringBuilder kebabCase = new StringBuilder();
+        for (char c : input.toCharArray()) {
+            if (Character.isUpperCase(c)) {
+                if (!kebabCase.isEmpty()) {
+                    kebabCase.append('-');
+                }
+                kebabCase.append(Character.toLowerCase(c));
+            } else if (c == ' ') {
+                kebabCase.append('-');
+            } else {
+                kebabCase.append(c);
+            }
+        }
+
+        return kebabCase.toString();
     }
 
     public RabbitMQConsumerProvider(RabbitMQClientProvider client, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz,
@@ -69,7 +89,6 @@ public class RabbitMQConsumerProvider implements Provider<QueueConsumer>, IGuice
         this.clazz = clazz;
         this.routingKey = routingKey;
         this.exchange = exchange;
-        this.exchangeFuture = exchangeFuture;
 
         // this.client.get().addConnectionEstablishedCallback((connectionEstablished) -> {
         exchangeFuture.thenAccept((result) -> {

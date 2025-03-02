@@ -7,12 +7,10 @@ import com.google.inject.name.Names;
 import com.guicedee.client.IGuiceContext;
 import com.guicedee.guicedinjection.interfaces.IGuiceModule;
 import com.guicedee.rabbit.*;
-import com.guicedee.rabbit.implementations.def.QueueOptionsDefault;
 import com.guicedee.rabbit.implementations.def.RabbitMQClientProvider;
 import com.guicedee.rabbit.support.TransactedMessageConsumer;
 import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
-import io.github.classgraph.FieldInfo;
 import io.github.classgraph.ScanResult;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQOptions;
@@ -20,14 +18,16 @@ import io.vertx.rabbitmq.RabbitMQPublisher;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.inject.Singleton;
-import lombok.extern.java.Log;
+import lombok.extern.log4j.Log4j2;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
 import java.util.*;
-import java.util.logging.Level;
+import java.util.stream.Collectors;
 
-@Log
+import static com.guicedee.rabbit.implementations.RabbitMQPreStartup.isFinal;
+import static com.guicedee.rabbit.implementations.RabbitMQPreStartup.isStatic;
+
+@Log4j2
 public class RabbitMQModule extends AbstractModule implements IGuiceModule<RabbitMQModule> {
 
     public static final Map<String, String> queueRoutingKeys = new HashMap<>();
@@ -52,35 +52,30 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
         return new ArrayList<>(boundKeys);
     }
 
-
-    private static boolean isFinal(Field field) {
-        return Modifier.isFinal(field.getModifiers());
-    }
-
-    private static boolean isStatic(Field field) {
-        return Modifier.isStatic(field.getModifiers());
-    }
-
-
     private List<Field> getPublisherField(ClassInfo aClass) {
-        List<Field> fields = new ArrayList<>();
-        for (var fieldInfo : aClass.loadClass().getDeclaredFields()) {
-            if (!isFinal(fieldInfo) && !isStatic(fieldInfo)) {
-                try {
-                    Field declaredField = aClass.loadClass().getDeclaredField(fieldInfo.getName());
-                    if (
-                            (declaredField.isAnnotationPresent(Inject.class) || declaredField.isAnnotationPresent(com.google.inject.Inject.class)) &&
-                                    (declaredField.isAnnotationPresent(Named.class) || declaredField.isAnnotationPresent(com.google.inject.name.Named.class))
-                    ) {
-                        fields.add(declaredField);
+        // Load the class once to avoid multiple calls
+        Class<?> clazz = aClass.loadClass();
+
+        return Arrays.stream(clazz.getDeclaredFields())  // Stream the declared fields
+                .filter(field -> !isFinal(field) && !isStatic(field)) // Filter out final and static fields
+                .filter(field -> {
+                    // Check annotation presence
+                    boolean hasInject = field.isAnnotationPresent(Inject.class) || field.isAnnotationPresent(com.google.inject.Inject.class);
+                    boolean hasNamed = field.isAnnotationPresent(Named.class) || field.isAnnotationPresent(com.google.inject.name.Named.class);
+                    return hasInject && hasNamed;
+                })
+                .map(field -> {
+                    try {
+                        // Attempt to re-fetch the field (if required)
+                        return clazz.getDeclaredField(field.getName());
+                    } catch (NoSuchFieldException | IllegalAccessError e) {
+                        // Log exception if necessary
+                        log.debug("Field {} could not be loaded: {}", field.getName(), e.getMessage());
+                        return null; // Null signals skipping this entry
                     }
-                } catch (NoSuchFieldException | IllegalAccessError e) {
-                    //   e.printStackTrace();
-                    //field not declared
-                }
-            }
-        }
-        return fields;
+                })
+                .filter(Objects::nonNull) // Remove null entries due to exceptions
+                .collect(Collectors.toList()); // Collect to the list
     }
 
     @Override
@@ -107,7 +102,7 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                         .asEagerSingleton();
             } else {
                 if (!defaultBound) {
-                    log.warning("Configuration default rabbit mq client to first found binding (should be first in order of loading) - " + connectionOption.value());
+                    log.warn("Configuration default rabbit mq client to first found binding (should be first in order of loading) - {}", connectionOption.value());
                     bind(RabbitMQClient.class).toProvider(clientProvider)
                             .asEagerSingleton();
                     defaultBound = true;
@@ -173,9 +168,9 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                     clientProvider.getClient()
                             .confirmSelect().onComplete((result,error)->{
                                 if (error != null) {
-                                    log.log(Level.SEVERE,"Cannot set connection publishes watch - " + connectionOption.value() + " - " + error.getMessage());
+                                    log.error("Cannot set connection publishes watch - {} - {}", connectionOption.value(), error.getMessage());
                                 }else {
-                                    log.config("Connection " + connectionOption.value() + " has confirm publishes enabled");
+                                    log.debug("Connection {} has confirm publishes enabled", connectionOption.value());
                                 }
                             });
                 });
