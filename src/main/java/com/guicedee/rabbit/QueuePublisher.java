@@ -1,29 +1,25 @@
 package com.guicedee.rabbit;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.guicedee.rabbit.implementations.def.RabbitMQClientProvider;
 import com.rabbitmq.client.AMQP;
 import io.vertx.core.buffer.Buffer;
+import io.vertx.rabbitmq.RabbitMQClient;
 import lombok.EqualsAndHashCode;
-import lombok.extern.java.Log;
+import lombok.extern.log4j.Log4j2;
 
 @JsonSerialize(as = Void.class)
 @EqualsAndHashCode(of = {"routingKey"})
-@Log
+@Log4j2
 public class QueuePublisher {
-/*
-    @Inject
-    private RabbitMQPublisher rabbitMQPublisher;
-*/
 
-    RabbitMQClientProvider client;
+    private final RabbitMQClient client;
     private final boolean confirmPublish;
-    private QueueDefinition queueDefinition;
+    private final QueueDefinition queueDefinition;
 
-    private String exchangeName;
-    private String routingKey;
+    private final String exchangeName;
+    private final String routingKey;
 
-    public QueuePublisher(RabbitMQClientProvider client, boolean confirmPublish, QueueDefinition queueDefinition, String exchangeName, String routingKey) {
+    public QueuePublisher(RabbitMQClient client, boolean confirmPublish, QueueDefinition queueDefinition, String exchangeName, String routingKey) {
         this.client = client;
         this.confirmPublish = confirmPublish;
         this.queueDefinition = queueDefinition;
@@ -33,40 +29,42 @@ public class QueuePublisher {
 
 
     public void publish(String body) {
-        sendMessage(body);
+        sendMessage(client,confirmPublish,queueDefinition,exchangeName,routingKey,body);
     }
 
-    private void sendMessage(String body) {
-      /*  if (rabbitMQPublisher == null) {
-            IGuiceContext.instance()
-                    .inject()
-                    .injectMembers(this);
-        }*/
+    private void sendMessage(RabbitMQClient client, boolean confirmPublish, QueueDefinition queueDefinition, String exchangeName, String routingKey, String body)
+    {
         AMQP.BasicProperties.Builder properties = new AMQP.BasicProperties.Builder();
         if (queueDefinition.options()
-                .priority() != 0) {
+                .priority() != 0)
+        {
             properties.priority(queueDefinition.options()
                     .priority());
         }
         Buffer message = Buffer.buffer(body);
 
-        if (confirmPublish) {
-            log.config("Message publishing to queue " + routingKey + " - " + exchangeName + " / " + body);
-            client.get().basicPublish(exchangeName, routingKey, message).onComplete(pubResult -> {
-                if (pubResult.succeeded()) {
+        if (confirmPublish)
+        {
+            log.trace("Message publishing to queue " + routingKey + " - " + exchangeName + " / " + body);
+            client.basicPublish(exchangeName, routingKey, message).onComplete(pubResult -> {
+                if (pubResult.succeeded())
+                {
                     // Check the message got confirmed by the broker.
-                    client.get().waitForConfirms().onComplete(waitResult -> {
+                    client.waitForConfirms().onComplete(waitResult -> {
                         if (waitResult.succeeded())
-                            log.config("Message published to queue " + routingKey + " - " + exchangeName);
+                            log.trace("Message published to queue " + routingKey + " - " + exchangeName);
                         else
                             waitResult.cause().printStackTrace();
                     });
-                } else {
+                } else
+                {
                     pubResult.cause().printStackTrace();
                 }
             });
         } else
-            client.get().basicPublish(exchangeName, routingKey, message);
+            client.basicPublish(exchangeName, routingKey, message)
+                    .onSuccess(v -> log.trace("Message published to queue " + routingKey + " - " + exchangeName))
+                    .onFailure(t-> log.error("Failed to publish message to queue " + routingKey + " - " + exchangeName,t));
     }
 
 }

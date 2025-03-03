@@ -6,6 +6,7 @@ import com.google.inject.name.Names;
 import com.guicedee.client.IGuiceContext;
 import com.guicedee.guicedinjection.interfaces.IGuicePreStartup;
 import com.guicedee.rabbit.*;
+import com.guicedee.rabbit.implementations.def.QueueOptionsDefault;
 import com.guicedee.vertx.spi.VertXPreStartup;
 import com.guicedee.vertx.spi.VerticleBuilder;
 import io.github.classgraph.ClassInfo;
@@ -17,6 +18,7 @@ import jakarta.inject.Named;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -42,6 +44,13 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     @Getter
     private static final Map<String, QueueDefinition> queueConsumerDefinitions = new HashMap<>();
+
+    /**
+     * Queue name definitions
+     */
+    @Getter
+    private static final Map<String, Class<? extends QueueConsumer>> queueConsumerClass = new HashMap<>();
+
     /**
      * Queue name definitions
      */
@@ -94,8 +103,16 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         ClassInfoList clientConnections = scanResult.getClassesWithAnnotation(RabbitConnectionOptions.class);
 
         clientConnections.stream()
+                .distinct()
                 .filter(clientConnection -> isVerticleBound(clientConnection))
                 .forEach(clientConnection -> processClientConnection(scanResult, clientConnection, completedConsumers));
+
+        clientConnections.stream()
+                .distinct()
+                .filter(clientConnection -> !isVerticleBound(clientConnection))
+                .forEach(clientConnection -> {
+                    log.error("RabbitMQ Client Connection found but not bound to a declared verticle - {}", clientConnection.getName());
+                });
     }
 
     private boolean isVerticleBound(ClassInfo clientConnection) {
@@ -125,6 +142,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     private List<ClassInfo> getExchanges(List<ClassInfo> classInfos, ClassInfo clientConnection) {
         var exchanges = classInfos.stream()
                 .filter(info -> info.hasAnnotation(QueueExchange.class))
+                .distinct()
                 .toList();
 
         if (exchanges.isEmpty()) {
@@ -157,6 +175,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     private void processExchangeConsumers(List<ClassInfo> exchangePackageClasses, String exchangeName, Set<Class<?>> completedConsumers) {
         var queueConsumers = exchangePackageClasses.stream()
                 .filter(info -> info.hasAnnotation(QueueDefinition.class))
+                .distinct()
                 .toList();
 
         for (ClassInfo consumerClassInfo : queueConsumers) {
@@ -176,7 +195,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         String queueName = queueDefinition.value();
 
         queueExchangeNames.put(queueName, exchangeName);
-        registerConsumerQueue(queueName, queueDefinition, consumerClass);
+        registerConsumerQueue(queueName, exchangeName, queueDefinition, consumerClass);
 
         String routingKey = exchangeName + "_" + queueDefinition.value();
         queueRoutingKeys.put(queueName, routingKey);
@@ -186,7 +205,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
 
     private void processExchangePublishers(List<ClassInfo> exchangePackageClasses, String exchangeName) {
         exchangePackageClasses.stream()
-                .filter(info -> info.hasDeclaredFieldAnnotation(QueueDefinition.class))
+                .filter(info -> info.hasDeclaredFieldAnnotation(QueueDefinition.class) ||
+                        info.getFieldInfo().stream()
+                                .anyMatch(a->a.getTypeSignatureOrTypeDescriptor().toString().equals("com.guicedee.rabbit.QueuePublisher")))
                 .forEach(publisherClassInfo -> registerQueuePublisher(publisherClassInfo, exchangeName));
     }
 
@@ -196,12 +217,47 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             String queueName = getQueueNameFromField(field, publisherClassInfo);
             if (!queuePublisherDefinitions.containsKey(queueName)) {
                 String publisherExchange = queueExchangeNames.getOrDefault(queueName, exchangeName);
-                var queueDefinition = field.getDeclaringClass().getAnnotation(QueueDefinition.class);
+                var queueDefinition = field.getAnnotation(QueueDefinition.class);
                 if (queueDefinition != null && !queueDefinition.exchange().equals("default")) {
                     publisherExchange = queueDefinition.exchange();
-                }
+                }else {
+                    publisherExchange = exchangeName;
+                    if (queueDefinition == null)
+                    {
+                        String finalPublisherExchange = publisherExchange;
+                        queueDefinition = new QueueDefinition(){
+                            @Override
+                            public Class<? extends Annotation> annotationType()
+                            {
+                                return QueueExchange.class;
+                            }
 
-                registerPublisherQueue(queueName, queueDefinition);
+                            @Override
+                            public String value()
+                            {
+                                return queueName;
+                            }
+
+                            @Override
+                            public QueueOptions options()
+                            {
+                                return new QueueOptionsDefault();
+                            }
+
+                            @Override
+                            public String exchange()
+                            {
+                                return finalPublisherExchange;
+                            }
+                        };
+                    }
+                }
+                registerPublisherQueue(queueName, exchangeName, queueDefinition,false);
+                if(!queueRoutingKeys.containsKey(queueName))
+                {
+                    String routingKey = exchangeName + "_" + queueDefinition.value();
+                    queueRoutingKeys.put(queueName, routingKey);
+                }
                 log.info("Found Queue Publisher - {} - {} - {}", queueName, publisherExchange, queueRoutingKeys.get(queueName));
             }
         }
@@ -218,16 +274,27 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }
     }
 
-    private void registerConsumerQueue(String queueName, QueueDefinition queueDefinition, Class<QueueConsumer> aClass)
+    private void registerConsumerQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, Class<QueueConsumer> aClass)
     {
         queueConsumerDefinitions.put(queueName, queueDefinition);
+        queueConsumerClass.put(queueName, aClass);
         queueConsumerKeys.put(queueName, Key.get(aClass, Names.named(queueName)));
+        registerPublisherQueue(queueName,exchangeName,queueDefinition,true);
     }
 
-    private void registerPublisherQueue(String queueName, QueueDefinition queueDefinition)
+    /**
+     *
+     * @param queueName
+     * @param queueDefinition
+     * @param override if it comes from a consumer definition
+     */
+    private void registerPublisherQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, boolean override)
     {
-        queuePublisherDefinitions.put(queueName, queueDefinition);
-        queuePublisherKeys.put(queueName, Key.get(QueuePublisher.class, Names.named(queueName)));
+        if(!queuePublisherDefinitions.containsKey(queueName) || override)
+        {
+            queuePublisherDefinitions.put(queueName, queueDefinition);
+            queuePublisherKeys.put(queueName, Key.get(QueuePublisher.class, Names.named(queueName)));
+        }
     }
 
     @Override
@@ -245,7 +312,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                     // Check annotation presence
                     boolean hasInject = field.isAnnotationPresent(Inject.class) || field.isAnnotationPresent(com.google.inject.Inject.class);
                     boolean hasNamed = field.isAnnotationPresent(Named.class) || field.isAnnotationPresent(com.google.inject.name.Named.class);
-                    return hasInject && hasNamed;
+                    return (hasInject && hasNamed) || field.getType().equals(QueuePublisher.class);
                 })
                 .map(field -> {
                     try {
