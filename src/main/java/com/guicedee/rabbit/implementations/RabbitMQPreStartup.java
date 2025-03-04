@@ -159,7 +159,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
 
     private void processClientConnection(ScanResult scanResult, ClassInfo clientConnection, Set<Class<?>> completedConsumers, boolean publishers)
     {
-        log.info("Found Verticle Bound RabbitMQ Connection - {}", clientConnection.getName());
+        log.debug("Found Verticle Bound RabbitMQ Connection - {}", clientConnection.getName());
 
         var connectionAnnotation = clientConnection.loadClass().getAnnotation(RabbitConnectionOptions.class);
         registerPackageConnection(clientConnection.getPackageName(), connectionAnnotation);
@@ -307,7 +307,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                     }
                 }
                 registerPublisherQueue(queueName, exchangeName, queueDefinition, false);
-                log.info("Found Queue Publisher - {} - {} - {}", queueName, publisherExchange, queueRoutingKeys.get(queueName));
+                log.debug("Found Queue Publisher - {} - {} - {}", queueName, publisherExchange, queueRoutingKeys.get(queueName));
             }
         }
     }
@@ -336,7 +336,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         String routingKey = exchangeName + "_" + queueDefinition.value();
         queueRoutingKeys.put(queueName, routingKey);
 
-        log.info("Found Queue Consumer - {} - {} - {}", queueName, exchangeName, routingKey);
+        log.debug("Found Queue Consumer - {} - {} - {}", queueName, exchangeName, routingKey);
 
         registerPublisherQueue(queueName, exchangeName, queueDefinition, true);
     }

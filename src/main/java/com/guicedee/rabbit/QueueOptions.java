@@ -16,7 +16,7 @@ public @interface QueueOptions {
 
     boolean delete() default false;
 
-    boolean autoAck() default true;
+    boolean autoAck() default false;
 
     boolean consumerExclusive() default false;
 

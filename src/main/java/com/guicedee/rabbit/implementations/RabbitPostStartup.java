@@ -4,7 +4,6 @@ import com.google.inject.Inject;
 import com.google.inject.Key;
 import com.google.inject.name.Names;
 import com.guicedee.client.CallScoper;
-import com.guicedee.client.Environment;
 import com.guicedee.client.IGuiceContext;
 import com.guicedee.guicedinjection.interfaces.IGuicePostStartup;
 import com.guicedee.guicedservlets.websockets.options.CallScopeProperties;
@@ -17,7 +16,6 @@ import com.guicedee.rabbit.support.TransactedMessageConsumer;
 import com.guicedee.vertx.spi.VertXPreStartup;
 import com.rabbitmq.client.AMQP;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.rabbitmq.QueueOptions;
@@ -31,8 +29,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import static com.guicedee.rabbit.implementations.RabbitMQModule.toOptions;
 
 @Log4j2
 public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
@@ -123,7 +119,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
                     if (deadletter)
                     {
                         // Declare Dead Letter Exchange
-                        log.info("Creating Dead Letter Exchange '{}'", dlxName);
+                        log.debug("Creating Dead Letter Exchange '{}'", dlxName);
                         return client.exchangeDeclare(dlxName, exchangeType, true, false) // DLX is durable and not auto-deleted
                                 .onSuccess(dlxResult -> log.info("Dead Letter Exchange '{}' declared successfully.", dlxName))
                                 .onFailure(dlxError -> log.error("Failed to declare Dead Letter Exchange '{}': {}", dlxName, dlxError.getMessage()));
@@ -175,7 +171,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         for (String queueName : matchingKeys)
         {
             out.add(VertXPreStartup.getVertx().executeBlocking(() -> {
-                log.info("Processing queueName '{}' mapped to exchange '{}'", queueName, targetExchangeName);
+                log.debug("Processing queueName '{}' mapped to exchange '{}'", queueName, targetExchangeName);
                 QueueDefinition queueDefinition = null;
                 if (RabbitMQPreStartup.getQueueConsumerDefinitions().containsKey(queueName))
                 {
@@ -192,7 +188,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
             }, false));
         }
         Future.all(out).onComplete(ar -> {
-            log.info("All queue consumers for exchange '{}' have been created.", targetExchangeName);
+            log.debug("All queue consumers for exchange '{}' have been created.", targetExchangeName);
         });
     }
 
@@ -224,7 +220,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
             queueConfig.put("x-max-priority", queueDefinition.options().priority());
         }
 
-        log.info("Attempting to declare queue '{}' (attempt {}/{})", queueDefinition.value(), attempt + 1, maxRetries);
+        log.debug("Attempting to declare queue '{}' (attempt {}/{})", queueDefinition.value(), attempt + 1, maxRetries);
 
         // Declare the queue
         return rabbitMQClient.queueDeclare(
@@ -238,7 +234,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
                     log.info("Queue '{}' declared successfully.", queueDefinition.value());
                     Map<String, Object> arguments = new HashMap<>();
                     rabbitMQClient.queueBind(queueDefinition.value(), exchangeName, routingKey, arguments)
-                            .onSuccess(bindResult -> log.info("Queue '{}' bound to exchange '{}' with routing key '{}'.",
+                            .onSuccess(bindResult -> log.debug("Queue '{}' bound to exchange '{}' with routing key '{}'.",
                                     queueDefinition.value(), exchangeName, routingKey))
                             .onFailure(bindError -> log.error("Failed to bind queue '{}' to exchange '{}': {}",
                                     queueDefinition.value(), exchangeName, bindError.getMessage()))
@@ -277,7 +273,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
                     }
                     // Delete the queue and retry
                     return rabbitMQClient.queueDelete(queueDefinition.value())
-                            .onSuccess(deleteResult -> log.info("Deleted queue '{}' successfully before retry.", queueDefinition.value()))
+                            .onSuccess(deleteResult -> log.debug("Deleted queue '{}' successfully before retry.", queueDefinition.value()))
                             .compose(deleteResult -> {
                                 log.info("Retrying queue declaration for '{}' (retry {}/{})", queueDefinition.value(), attempt + 2, maxRetries);
                                 return createQueueWithRetries(rabbitMQClient, routingKey, clazz, exchangeName, attempt + 1, maxRetries); // Retry with incremented attempt
@@ -293,7 +289,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
 
     private void setupConsumer(RabbitMQClient client, RabbitMQConsumer consumer, String routingKey, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
     {
-        log.info("RabbitMQ consumer for queue '{}' created successfully.", queueDefinition.value());
+        log.debug("RabbitMQ consumer for queue '{}' setting up.", queueDefinition.value());
         //consumer.setQueueName(queueDefinition.value());
         consumer.fetch(queueDefinition.options().fetchCount());
         // Handle transacted vs. non-transacted consumers
