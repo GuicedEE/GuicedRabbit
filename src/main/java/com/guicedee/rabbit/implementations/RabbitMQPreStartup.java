@@ -45,6 +45,20 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     @Getter
     private static final Map<String, QueueDefinition> queueConsumerDefinitions = new HashMap<>();
 
+    public static Map<String, QueueDefinition> getQueueConsumerDefinitions(String packageName)
+    {
+        Map<String, QueueDefinition> packageLimitedQueueDefinitions = new HashMap<>();
+        queueExchangeNames.forEach((queueName, exchangeName) -> {
+            packageExchanges.forEach((pack,exchangeNam)->{
+                if(exchangeName.equals(exchangeNam))
+                {
+                    packageLimitedQueueDefinitions.put(queueName, queueConsumerDefinitions.get(queueName));
+                }
+            });
+        });
+        return packageLimitedQueueDefinitions;
+    }
+
     /**
      * Queue name definitions
      */
@@ -61,6 +75,21 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     @Getter
     private static final Map<String, QueueDefinition> queuePublisherDefinitions = new HashMap<>();
+
+    public static Map<String, QueueDefinition> getQueuePublisherDefinitions(String packageName)
+    {
+        Map<String, QueueDefinition> packageLimitedQueueDefinitions = new HashMap<>();
+        queueExchangeNames.forEach((queueName, exchangeName) -> {
+            packageExchanges.forEach((pack,exchangeNam)->{
+                if(pack.equals(packageName) && exchangeName.equals(exchangeNam))
+                {
+                    packageLimitedQueueDefinitions.put(queueName, queuePublisherDefinitions.get(queueName));
+                }
+            });
+        });
+        return packageLimitedQueueDefinitions;
+    }
+
     /**
      * A list of injection keys per publisher
      */
@@ -87,7 +116,8 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
 
 
     @Override
-    public List<Future<Boolean>> onStartup() {
+    public List<Future<Boolean>> onStartup()
+    {
         return List.of(VertXPreStartup.getVertx().executeBlocking(() -> {
             ScanResult scanResult = IGuiceContext.instance().getScanResult();
             Set<Class<?>> completedConsumers = new HashSet<>();
@@ -99,13 +129,18 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }));
     }
 
-    private void processClientConnections(ScanResult scanResult, Set<Class<?>> completedConsumers) {
+    private void processClientConnections(ScanResult scanResult, Set<Class<?>> completedConsumers)
+    {
         ClassInfoList clientConnections = scanResult.getClassesWithAnnotation(RabbitConnectionOptions.class);
 
         clientConnections.stream()
                 .distinct()
-                .filter(clientConnection -> isVerticleBound(clientConnection))
-                .forEach(clientConnection -> processClientConnection(scanResult, clientConnection, completedConsumers));
+                .filter(this::isVerticleBound)
+                .forEach(clientConnection -> processClientConnection(scanResult, clientConnection, completedConsumers, false));
+        clientConnections.stream()
+                .distinct()
+                .filter(this::isVerticleBound)
+                .forEach(clientConnection -> processClientConnection(scanResult, clientConnection, completedConsumers, true));
 
         clientConnections.stream()
                 .distinct()
@@ -115,13 +150,15 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                 });
     }
 
-    private boolean isVerticleBound(ClassInfo clientConnection) {
+    private boolean isVerticleBound(ClassInfo clientConnection)
+    {
         return VerticleBuilder.getVerticlePackages()
                 .keySet().stream()
                 .anyMatch(pkg -> clientConnection.getName().startsWith(pkg));
     }
 
-    private void processClientConnection(ScanResult scanResult, ClassInfo clientConnection, Set<Class<?>> completedConsumers) {
+    private void processClientConnection(ScanResult scanResult, ClassInfo clientConnection, Set<Class<?>> completedConsumers, boolean publishers)
+    {
         log.info("Found Verticle Bound RabbitMQ Connection - {}", clientConnection.getName());
 
         var connectionAnnotation = clientConnection.loadClass().getAnnotation(RabbitConnectionOptions.class);
@@ -130,39 +167,48 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         var classInfos = scanResult.getPackageInfo(clientConnection.getPackageName()).getClassInfoRecursive();
         var exchanges = getExchanges(classInfos, clientConnection);
 
-        for (ClassInfo exchange : exchanges) {
-            processExchange(exchange, completedConsumers);
+        for (ClassInfo exchange : exchanges)
+        {
+            processExchange(exchange, completedConsumers, publishers);
         }
     }
 
-    private void registerPackageConnection(String packageName, RabbitConnectionOptions connectionAnnotation) {
-        packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>()).add(connectionAnnotation);
+    private void registerPackageConnection(String packageName, RabbitConnectionOptions connectionAnnotation)
+    {
+        if (!packageRabbitMqConnections.containsKey(packageName))
+            packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>()).add(connectionAnnotation);
     }
 
-    private List<ClassInfo> getExchanges(List<ClassInfo> classInfos, ClassInfo clientConnection) {
+    private List<ClassInfo> getExchanges(List<ClassInfo> classInfos, ClassInfo clientConnection)
+    {
         var exchanges = classInfos.stream()
                 .filter(info -> info.hasAnnotation(QueueExchange.class))
                 .distinct()
                 .toList();
 
-        if (exchanges.isEmpty()) {
+        if (exchanges.isEmpty())
+        {
             throw new RuntimeException("No @QueueExchange Declared for Package - " + clientConnection.getPackageName());
         }
         return exchanges;
     }
 
-    private void processExchange(ClassInfo exchange, Set<Class<?>> completedConsumers) {
+    private void processExchange(ClassInfo exchange, Set<Class<?>> completedConsumers, boolean publishers)
+    {
         String exchangeName = registerExchange(exchange);
         var exchangePackageClasses = exchange.getPackageInfo().getClassInfoRecursive();
 
         // Process Consumers
-        processExchangeConsumers(exchangePackageClasses, exchangeName, completedConsumers);
+        if (!publishers)
+            processExchangeConsumers(exchangePackageClasses, exchangeName, completedConsumers);
 
         // Process Publishers
-        processExchangePublishers(exchangePackageClasses, exchangeName);
+        if (publishers)
+            processExchangePublishers(exchangePackageClasses, exchangeName);
     }
 
-    private String registerExchange(ClassInfo exchange) {
+    private String registerExchange(ClassInfo exchange)
+    {
         var ex = exchange.loadClass().getAnnotation(QueueExchange.class);
         String exchangeName = Strings.isNullOrEmpty(ex.value()) ? "default" : ex.value();
 
@@ -172,21 +218,25 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         return exchangeName;
     }
 
-    private void processExchangeConsumers(List<ClassInfo> exchangePackageClasses, String exchangeName, Set<Class<?>> completedConsumers) {
+    private void processExchangeConsumers(List<ClassInfo> exchangePackageClasses, String exchangeName, Set<Class<?>> completedConsumers)
+    {
         var queueConsumers = exchangePackageClasses.stream()
                 .filter(info -> info.hasAnnotation(QueueDefinition.class))
                 .distinct()
                 .toList();
 
-        for (ClassInfo consumerClassInfo : queueConsumers) {
+        for (ClassInfo consumerClassInfo : queueConsumers)
+        {
             registerQueueConsumer(consumerClassInfo, exchangeName, completedConsumers);
         }
     }
 
-    private void registerQueueConsumer(ClassInfo consumerClassInfo, String exchangeName, Set<Class<?>> completedConsumers) {
+    private void registerQueueConsumer(ClassInfo consumerClassInfo, String exchangeName, Set<Class<?>> completedConsumers)
+    {
         Class<QueueConsumer> consumerClass = (Class<QueueConsumer>) consumerClassInfo.loadClass();
 
-        if (completedConsumers.contains(consumerClass)) {
+        if (completedConsumers.contains(consumerClass))
+        {
             return;
         }
         completedConsumers.add(consumerClass);
@@ -194,38 +244,42 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         var queueDefinition = consumerClass.getAnnotation(QueueDefinition.class);
         String queueName = queueDefinition.value();
 
-        queueExchangeNames.put(queueName, exchangeName);
+        if (!queueExchangeNames.containsKey(queueName))
+            queueExchangeNames.put(queueName, exchangeName);
+
         registerConsumerQueue(queueName, exchangeName, queueDefinition, consumerClass);
-
-        String routingKey = exchangeName + "_" + queueDefinition.value();
-        queueRoutingKeys.put(queueName, routingKey);
-
-        log.info("Found Queue Consumer - {} - {} - {}", queueName, exchangeName, routingKey);
     }
 
-    private void processExchangePublishers(List<ClassInfo> exchangePackageClasses, String exchangeName) {
+    private void processExchangePublishers(List<ClassInfo> exchangePackageClasses, String exchangeName)
+    {
         exchangePackageClasses.stream()
                 .filter(info -> info.hasDeclaredFieldAnnotation(QueueDefinition.class) ||
                         info.getFieldInfo().stream()
-                                .anyMatch(a->a.getTypeSignatureOrTypeDescriptor().toString().equals("com.guicedee.rabbit.QueuePublisher")))
+                                .anyMatch(a -> a.getTypeSignatureOrTypeDescriptor().toString().equals("com.guicedee.rabbit.QueuePublisher")))
                 .forEach(publisherClassInfo -> registerQueuePublisher(publisherClassInfo, exchangeName));
     }
 
-    private void registerQueuePublisher(ClassInfo publisherClassInfo, String exchangeName) {
+    private void registerQueuePublisher(ClassInfo publisherClassInfo, String exchangeName)
+    {
         var fields = getPublisherField(publisherClassInfo);
-        for (Field field : fields) {
+        for (Field field : fields)
+        {
             String queueName = getQueueNameFromField(field, publisherClassInfo);
-            if (!queuePublisherDefinitions.containsKey(queueName)) {
+            if (!queuePublisherDefinitions.containsKey(queueName))
+            {
                 String publisherExchange = queueExchangeNames.getOrDefault(queueName, exchangeName);
                 var queueDefinition = field.getAnnotation(QueueDefinition.class);
-                if (queueDefinition != null && !queueDefinition.exchange().equals("default")) {
+                if (queueDefinition != null && !queueDefinition.exchange().equals("default"))
+                {
                     publisherExchange = queueDefinition.exchange();
-                }else {
+                } else
+                {
                     publisherExchange = exchangeName;
                     if (queueDefinition == null)
                     {
                         String finalPublisherExchange = publisherExchange;
-                        queueDefinition = new QueueDefinition(){
+                        queueDefinition = new QueueDefinition()
+                        {
                             @Override
                             public Class<? extends Annotation> annotationType()
                             {
@@ -252,23 +306,22 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                         };
                     }
                 }
-                registerPublisherQueue(queueName, exchangeName, queueDefinition,false);
-                if(!queueRoutingKeys.containsKey(queueName))
-                {
-                    String routingKey = exchangeName + "_" + queueDefinition.value();
-                    queueRoutingKeys.put(queueName, routingKey);
-                }
+                registerPublisherQueue(queueName, exchangeName, queueDefinition, false);
                 log.info("Found Queue Publisher - {} - {} - {}", queueName, publisherExchange, queueRoutingKeys.get(queueName));
             }
         }
     }
 
-    private String getQueueNameFromField(Field field, ClassInfo publisherClassInfo) {
-        if (field.isAnnotationPresent(Named.class)) {
+    private String getQueueNameFromField(Field field, ClassInfo publisherClassInfo)
+    {
+        if (field.isAnnotationPresent(Named.class))
+        {
             return field.getAnnotation(Named.class).value();
-        } else if (field.isAnnotationPresent(com.google.inject.name.Named.class)) {
+        } else if (field.isAnnotationPresent(com.google.inject.name.Named.class))
+        {
             return field.getAnnotation(com.google.inject.name.Named.class).value();
-        } else {
+        } else
+        {
             var queueDefinition = publisherClassInfo.loadClass().getAnnotation(QueueDefinition.class);
             return queueDefinition != null ? queueDefinition.value() : null;
         }
@@ -279,21 +332,35 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         queueConsumerDefinitions.put(queueName, queueDefinition);
         queueConsumerClass.put(queueName, aClass);
         queueConsumerKeys.put(queueName, Key.get(aClass, Names.named(queueName)));
-        registerPublisherQueue(queueName,exchangeName,queueDefinition,true);
+
+        String routingKey = exchangeName + "_" + queueDefinition.value();
+        queueRoutingKeys.put(queueName, routingKey);
+
+        log.info("Found Queue Consumer - {} - {} - {}", queueName, exchangeName, routingKey);
+
+        registerPublisherQueue(queueName, exchangeName, queueDefinition, true);
     }
 
     /**
-     *
      * @param queueName
      * @param queueDefinition
-     * @param override if it comes from a consumer definition
+     * @param override        if it comes from a consumer definition
      */
     private void registerPublisherQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, boolean override)
     {
-        if(!queuePublisherDefinitions.containsKey(queueName) || override)
+        if (!queuePublisherDefinitions.containsKey(queueName) || override)
         {
             queuePublisherDefinitions.put(queueName, queueDefinition);
             queuePublisherKeys.put(queueName, Key.get(QueuePublisher.class, Names.named(queueName)));
+        }
+        if (!queueRoutingKeys.containsKey(queueName) || override)
+        {
+            String routingKey = exchangeName + "_" + queueDefinition.value();
+            queueRoutingKeys.put(queueName, routingKey);
+        }
+        if (!queueExchangeNames.containsKey(queueName))
+        {
+            queueExchangeNames.put(queueName, exchangeName);
         }
     }
 
@@ -303,7 +370,8 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         return Integer.MIN_VALUE + 80;
     }
 
-    private List<Field> getPublisherField(ClassInfo aClass) {
+    private List<Field> getPublisherField(ClassInfo aClass)
+    {
         // Load the class once to avoid multiple calls
         Class<?> clazz = aClass.loadClass();
         return Arrays.stream(clazz.getDeclaredFields())  // Stream the declared fields
@@ -312,13 +380,15 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                     // Check annotation presence
                     boolean hasInject = field.isAnnotationPresent(Inject.class) || field.isAnnotationPresent(com.google.inject.Inject.class);
                     boolean hasNamed = field.isAnnotationPresent(Named.class) || field.isAnnotationPresent(com.google.inject.name.Named.class);
-                    return (hasInject && hasNamed) || field.getType().equals(QueuePublisher.class);
+                    return (hasInject && hasNamed) && (field.getType().equals(QueuePublisher.class));
                 })
                 .map(field -> {
-                    try {
+                    try
+                    {
                         // Attempt to re-fetch the field (if required)
                         return clazz.getDeclaredField(field.getName());
-                    } catch (NoSuchFieldException | IllegalAccessError e) {
+                    } catch (NoSuchFieldException | IllegalAccessError e)
+                    {
                         // Log exception if necessary
                         log.debug("Field {} could not be loaded: {}", field.getName(), e.getMessage());
                         return null; // Null signals skipping this entry

@@ -45,14 +45,14 @@ public class QueuePublisher {
 
         if (confirmPublish)
         {
-            log.trace("Message publishing to queue " + routingKey + " - " + exchangeName + " / " + body);
+            log.trace("Message publishing to queue {} - {} / {}", routingKey, exchangeName, body);
             client.basicPublish(exchangeName, routingKey, message).onComplete(pubResult -> {
                 if (pubResult.succeeded())
                 {
                     // Check the message got confirmed by the broker.
                     client.waitForConfirms().onComplete(waitResult -> {
                         if (waitResult.succeeded())
-                            log.trace("Message published to queue " + routingKey + " - " + exchangeName);
+                            log.trace("Message published to queue {} - {}", routingKey, exchangeName);
                         else
                             waitResult.cause().printStackTrace();
                     });
@@ -63,8 +63,8 @@ public class QueuePublisher {
             });
         } else
             client.basicPublish(exchangeName, routingKey, message)
-                    .onSuccess(v -> log.trace("Message published to queue " + routingKey + " - " + exchangeName))
-                    .onFailure(t-> log.error("Failed to publish message to queue " + routingKey + " - " + exchangeName,t));
+                    .onSuccess(v -> log.trace("Message published to queue {} - {}", routingKey, exchangeName))
+                    .onFailure(t-> log.error("Failed to publish message to queue {} - {}", routingKey, exchangeName, t));
     }
 
 }
