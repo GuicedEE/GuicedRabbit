@@ -2,7 +2,7 @@ package com.guicedee.rabbit.implementations;
 
 import com.guicedee.client.IGuiceContext;
 import com.guicedee.rabbit.QueuePublisher;
-import jakarta.inject.Inject;
+import com.google.inject.Inject;
 import jakarta.inject.Named;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.RabbitMQContainer;

@@ -3,6 +3,7 @@ package com.guicedee.rabbit.implementations;
 import com.google.common.base.Strings;
 import com.google.inject.AbstractModule;
 import com.google.inject.Key;
+import com.google.inject.Singleton;
 import com.google.inject.name.Names;
 import com.guicedee.client.Environment;
 import com.guicedee.client.IGuiceContext;
@@ -12,22 +13,15 @@ import com.guicedee.rabbit.QueuePublisher;
 import com.guicedee.rabbit.RabbitConnectionOptions;
 import com.guicedee.rabbit.support.TransactedMessageConsumer;
 import com.guicedee.vertx.spi.VertXPreStartup;
-import io.github.classgraph.ClassInfo;
 import io.vertx.core.Future;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQOptions;
-import jakarta.inject.Inject;
-import jakarta.inject.Named;
-import jakarta.inject.Singleton;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
-import java.lang.reflect.Field;
 import java.util.*;
-import java.util.stream.Collectors;
 
-import static com.guicedee.rabbit.implementations.RabbitMQPreStartup.isFinal;
-import static com.guicedee.rabbit.implementations.RabbitMQPreStartup.isStatic;
+;
 
 @Log4j2
 public class RabbitMQModule extends AbstractModule implements IGuiceModule<RabbitMQModule>

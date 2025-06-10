@@ -13,7 +13,7 @@ import io.github.classgraph.ClassInfo;
 import io.github.classgraph.ClassInfoList;
 import io.github.classgraph.ScanResult;
 import io.vertx.core.Future;
-import jakarta.inject.Inject;
+import com.google.inject.Inject;
 import jakarta.inject.Named;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;

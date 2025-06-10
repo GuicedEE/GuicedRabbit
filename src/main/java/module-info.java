@@ -13,7 +13,10 @@ module com.guicedee.rabbit {
     requires static lombok;
 
     requires com.rabbitmq.client;
+
     requires jakarta.transaction;
+
+
     requires io.github.classgraph;
     requires org.apache.commons.lang3;
 

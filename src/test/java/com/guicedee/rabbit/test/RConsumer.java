@@ -5,7 +5,7 @@ import com.guicedee.rabbit.QueueDefinition;
 import com.guicedee.rabbit.RabbitConnectionOptions;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.rabbitmq.RabbitMQMessage;
-import jakarta.inject.Singleton;
+import com.google.inject.Singleton;;
 
 @RabbitConnectionOptions(value = "connection-1",
                          password = "guest",
