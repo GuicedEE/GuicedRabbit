@@ -249,7 +249,7 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
                                         qo.setConsumerExclusive(queueDefinition.options().consumerExclusive());
                                         qo.setConsumerTag(buildConsumerTag(routingKey, i + 1));
                                         qo.setNoLocal(queueDefinition.options().noLocal());
-                                        qo.setKeepMostRecent(queueDefinition.options().keepMostRecent());
+                                        //qo.setKeepMostRecent(queueDefinition.options().keepMostRecent());
                                         //qo.setConsumerArguments();
                                         rabbitMQClient.basicConsumer(queueDefinition.value(), qo)
                                                 .onSuccess(handler -> {
