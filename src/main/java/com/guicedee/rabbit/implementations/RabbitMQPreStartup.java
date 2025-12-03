@@ -4,7 +4,7 @@ import com.google.common.base.Strings;
 import com.google.inject.Key;
 import com.google.inject.name.Names;
 import com.guicedee.client.IGuiceContext;
-import com.guicedee.guicedinjection.interfaces.IGuicePreStartup;
+import com.guicedee.client.services.lifecycle.IGuicePreStartup;
 import com.guicedee.rabbit.*;
 import com.guicedee.rabbit.implementations.def.QueueOptionsDefault;
 import com.guicedee.vertx.spi.VertXPreStartup;

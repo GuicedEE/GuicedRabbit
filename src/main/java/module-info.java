@@ -1,4 +1,6 @@
-import com.guicedee.guicedinjection.interfaces.*;
+import com.guicedee.client.services.lifecycle.IGuiceModule;
+import com.guicedee.client.services.lifecycle.IGuicePostStartup;
+import com.guicedee.client.services.lifecycle.IGuicePreStartup;
 import com.guicedee.rabbit.implementations.*;
 
 module com.guicedee.rabbit {
@@ -22,7 +24,7 @@ module com.guicedee.rabbit {
 
     provides IGuicePostStartup with RabbitPostStartup;
     provides IGuiceModule with RabbitMQModule;
-    provides com.guicedee.guicedinjection.interfaces.IGuicePreStartup with RabbitMQPreStartup;
+    provides IGuicePreStartup with RabbitMQPreStartup;
 
     opens com.guicedee.rabbit.support to com.google.guice;
     opens com.guicedee.rabbit to com.google.guice,com.fasterxml.jackson.databind;

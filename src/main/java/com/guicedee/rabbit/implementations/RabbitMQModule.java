@@ -7,7 +7,7 @@ import com.google.inject.Singleton;
 import com.google.inject.name.Names;
 import com.guicedee.client.Environment;
 import com.guicedee.client.IGuiceContext;
-import com.guicedee.guicedinjection.interfaces.IGuiceModule;
+import com.guicedee.client.services.lifecycle.IGuiceModule;
 import com.guicedee.rabbit.QueueConsumer;
 import com.guicedee.rabbit.QueuePublisher;
 import com.guicedee.rabbit.RabbitConnectionOptions;
