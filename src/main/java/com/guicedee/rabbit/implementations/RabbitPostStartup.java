@@ -171,20 +171,43 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         for (String queueName : matchingKeys)
         {
             out.add(VertXPreStartup.getVertx().executeBlocking(() -> {
-                log.debug("Processing queueName '{}' mapped to exchange '{}'", queueName, targetExchangeName);
-                QueueDefinition queueDefinition = null;
-                if (RabbitMQPreStartup.getQueueConsumerDefinitions().containsKey(queueName))
+                com.guicedee.client.scopes.CallScoper callScoper = null;
+                boolean started = false;
+                try
                 {
-                    queueDefinition = RabbitMQPreStartup.getQueueConsumerDefinitions().get(queueName);
+                    callScoper = IGuiceContext.get(com.guicedee.client.scopes.CallScoper.class);
+                    if (!callScoper.isStartedScope())
+                    {
+                        callScoper.enter();
+                        started = true;
+                    }
+                    com.guicedee.client.scopes.CallScopeProperties props = IGuiceContext.get(com.guicedee.client.scopes.CallScopeProperties.class);
+                    if (props.getSource() == null || props.getSource() == com.guicedee.client.scopes.CallScopeSource.Unknown)
+                    {
+                        props.setSource(com.guicedee.client.scopes.CallScopeSource.Startup);
+                    }
+                    log.debug("Processing queueName '{}' mapped to exchange '{}'", queueName, targetExchangeName);
+                    QueueDefinition queueDefinition = null;
+                    if (RabbitMQPreStartup.getQueueConsumerDefinitions().containsKey(queueName))
+                    {
+                        queueDefinition = RabbitMQPreStartup.getQueueConsumerDefinitions().get(queueName);
+                    }
+                    if (queueDefinition != null)
+                    {
+                        String routingKey = RabbitMQPreStartup.getQueueRoutingKeys().get(queueName);
+                        String queueExchangeName = queueDefinition.exchange().isEmpty() || queueDefinition.exchange().equals("default") ? targetExchangeName : queueDefinition.exchange();
+                        Class<? extends QueueConsumer> consumerClass = RabbitMQPreStartup.getQueueConsumerClass().get(queueName);
+                        queueConsumerFutures.put(queueName, createQueue(client, routingKey, consumerClass, queueExchangeName));
+                    }
+                    return true;
                 }
-                if (queueDefinition != null)
+                finally
                 {
-                    String routingKey = RabbitMQPreStartup.getQueueRoutingKeys().get(queueName);
-                    String queueExchangeName = queueDefinition.exchange().isEmpty() || queueDefinition.exchange().equals("default") ? targetExchangeName : queueDefinition.exchange();
-                    Class<? extends QueueConsumer> consumerClass = RabbitMQPreStartup.getQueueConsumerClass().get(queueName);
-                    queueConsumerFutures.put(queueName, createQueue(client, routingKey, consumerClass, queueExchangeName));
+                    if (started && callScoper != null)
+                    {
+                        callScoper.exit();
+                    }
                 }
-                return true;
             }, false));
         }
         Future.all(out).onComplete(ar -> {
