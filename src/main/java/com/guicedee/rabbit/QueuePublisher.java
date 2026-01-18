@@ -10,6 +10,9 @@ import lombok.extern.log4j.Log4j2;
 @JsonSerialize(as = Void.class)
 @EqualsAndHashCode(of = {"routingKey"})
 @Log4j2
+/**
+ * Publishes messages to a resolved exchange and routing key derived from a {@link QueueDefinition}.
+ */
 public class QueuePublisher {
 
     private final RabbitMQClient client;
@@ -19,6 +22,15 @@ public class QueuePublisher {
     private final String exchangeName;
     private final String routingKey;
 
+    /**
+     * Creates a publisher bound to a specific exchange and routing key.
+     *
+     * @param client          The RabbitMQ client used to publish messages.
+     * @param confirmPublish  Whether to wait for broker confirms after publish.
+     * @param queueDefinition The queue definition used to build message properties.
+     * @param exchangeName    The exchange to publish to.
+     * @param routingKey      The routing key to publish with.
+     */
     public QueuePublisher(RabbitMQClient client, boolean confirmPublish, QueueDefinition queueDefinition, String exchangeName, String routingKey) {
         this.client = client;
         this.confirmPublish = confirmPublish;
@@ -27,11 +39,18 @@ public class QueuePublisher {
         this.routingKey = routingKey;
     }
 
-
+    /**
+     * Publishes a string payload to the configured exchange/routing key.
+     *
+     * @param body The message body to publish.
+     */
     public void publish(String body) {
         sendMessage(client,confirmPublish,queueDefinition,exchangeName,routingKey,body);
     }
 
+    /**
+     * Publishes a message with optional confirmation handling and per-queue priority.
+     */
     private void sendMessage(RabbitMQClient client, boolean confirmPublish, QueueDefinition queueDefinition, String exchangeName, String routingKey, String body)
     {
         AMQP.BasicProperties.Builder properties = new AMQP.BasicProperties.Builder();

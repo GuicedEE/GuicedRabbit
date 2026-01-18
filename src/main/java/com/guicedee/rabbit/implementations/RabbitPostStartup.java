@@ -30,6 +30,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Post-startup initializer that declares exchanges/queues and starts consumers.
+ */
 @Log4j2
 public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
 {
@@ -37,6 +40,11 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
     @Inject
     private Vertx vertx;
 
+    /**
+     * Runs after startup to declare exchanges/queues and start consumers.
+     *
+     * @return Futures that complete once post-load work is scheduled.
+     */
     @Override
     public List<Future<Boolean>> postLoad()
     {
@@ -65,6 +73,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
 
     private static final Map<String, Future<?>> exchangeFutures = new HashMap<>();
 
+    /**
+     * Ensures the exchange exists, enables confirms if configured, and triggers queue creation.
+     */
     private void processExchangeRegistration(String packageName, RabbitConnectionOptions connectionOption, String exchangeName, boolean confirmPublishSet, RabbitMQClient client, QueueExchange exchangeNameProperties)
     {
         RabbitMQModule.getPackageConnectionFutures().get(packageName)
@@ -98,6 +109,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
     }
 
 
+    /**
+     * Declares the exchange with optional dead-letter exchange creation and retries on failure.
+     */
     private Future<Void> declareExchangeWithRetry(
             RabbitMQClient client,
             String exchangeName,
@@ -141,6 +155,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
                 });
     }
 
+    /**
+     * Declares a dead-letter queue bound to the provided dead-letter exchange.
+     */
     private Future<AMQP.Queue.DeclareOk> declareDeadLetterQueue(RabbitMQClient client, String dlxExchangeName, String queueName, boolean durable)
     {
         Map<String, Object> queueArguments = new HashMap<>();
@@ -157,6 +174,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
     @Getter
     private static final Map<String, Future<?>> queueConsumerFutures = new HashMap<>();
 
+    /**
+     * Creates and binds queues for the target exchange, then starts consumers.
+     */
     private void processExchangeConsumerQueues(RabbitMQClient client, String targetExchangeName)
     {
         // Filter keys that map to the targetExchangeName
@@ -215,11 +235,23 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         });
     }
 
+    /**
+     * Creates a queue and binds it to an exchange with limited retry attempts.
+     *
+     * @param rabbitMQClient The client used for declarations.
+     * @param routingKey     The routing key to bind.
+     * @param clazz          The consumer class.
+     * @param exchangeName   The exchange name.
+     * @return A future representing queue declaration completion.
+     */
     public Future<AMQP.Queue.DeclareOk> createQueue(RabbitMQClient rabbitMQClient, String routingKey, Class<? extends QueueConsumer> clazz, String exchangeName)
     {
         return createQueueWithRetries(rabbitMQClient, routingKey, clazz, exchangeName, 0, 2); // Start with attempt 0, max retries 2
     }
 
+    /**
+     * Declares and binds the queue, starting consumers and retrying on failure.
+     */
     private Future<AMQP.Queue.DeclareOk> createQueueWithRetries(RabbitMQClient rabbitMQClient, String routingKey, Class<? extends QueueConsumer> clazz, String exchangeName, int attempt, int maxRetries)
     {
         Future<AMQP.Queue.DeclareOk> out = null;
@@ -305,11 +337,17 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
     }
 
 
+    /**
+     * Builds a unique consumer tag for the routing key.
+     */
     private String buildConsumerTag(String routingKey, int index)
     {
         return routingKey + "_consumer_" + index;
     }
 
+    /**
+     * Configures the RabbitMQ consumer and dispatches to transacted or standard flow.
+     */
     private void setupConsumer(RabbitMQClient client, RabbitMQConsumer consumer, String routingKey, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
     {
         log.debug("RabbitMQ consumer for queue '{}' setting up.", queueDefinition.value());
@@ -326,6 +364,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
 
     }
 
+    /**
+     * Prepares a transactional consumer that processes messages within a scoped transaction.
+     */
     private void setupTransactedConsumer(RabbitMQClient client, RabbitMQConsumer consumer, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
     {
         var tmc = IGuiceContext.get(Key.get(TransactedMessageConsumer.class, Names.named(queueDefinition.value())));
@@ -334,6 +375,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         consumer.handler(message -> processMessageWithTransaction(client, tmc, message, queueDefinition, clazz));
     }
 
+    /**
+     * Handles a message in a transactional scope with explicit acknowledgements.
+     */
     private void processMessageWithTransaction(RabbitMQClient client, TransactedMessageConsumer tmc, RabbitMQMessage message, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
     {
         var verticleOptional = VertXPreStartup.getAssociatedVerticle(clazz);
@@ -380,11 +424,17 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         }, queueDefinition.options().singleConsumer());
     }
 
+    /**
+     * Prepares a standard consumer handler.
+     */
     private void setupStandardConsumer(RabbitMQClient client, RabbitMQConsumer consumer, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
     {
         consumer.handler(message -> processMessage(client, message, queueDefinition, clazz));
     }
 
+    /**
+     * Handles a message without transactional wrapping, using the configured consumer.
+     */
     private void processMessage(RabbitMQClient client, RabbitMQMessage message, QueueDefinition queueDefinition, Class<? extends QueueConsumer> clazz)
     {
         var verticleOptional = VertXPreStartup.getAssociatedVerticle(clazz);
@@ -431,6 +481,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
         }, queueDefinition.options().singleConsumer());
     }
 
+    /**
+     * Acknowledges a delivered message.
+     */
     private void acknowledgeMessage(RabbitMQClient client, RabbitMQMessage message, boolean multiple)
     {
         client.basicAck(message.envelope().getDeliveryTag(), multiple)
@@ -445,6 +498,9 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
                 });
     }
 
+    /**
+     * Rejects a delivered message with optional requeue.
+     */
     private void rejectMessage(RabbitMQClient client, RabbitMQMessage message, boolean requeue)
     {
         client.basicNack(message.envelope().getDeliveryTag(), false, requeue)
@@ -473,6 +529,11 @@ public class RabbitPostStartup implements IGuicePostStartup<RabbitPostStartup>
     }
 */
 
+    /**
+     * Ensures this post-startup step runs late in the lifecycle.
+     *
+     * @return Ordering value for the post-startup hook.
+     */
     @Override
     public Integer sortOrder()
     {

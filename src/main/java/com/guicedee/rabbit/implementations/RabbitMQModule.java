@@ -23,6 +23,10 @@ import java.util.*;
 
 ;
 
+/**
+ * Guice module that binds RabbitMQ clients, publishers, and consumers based on
+ * discovered annotations at startup.
+ */
 @Log4j2
 public class RabbitMQModule extends AbstractModule implements IGuiceModule<RabbitMQModule>
 {
@@ -34,6 +38,9 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
     @Getter
     private static final Map<String, RabbitMQClient> exchangeClients = new HashMap<>();
 
+    /**
+     * Binds RabbitMQ clients, consumers, and publishers discovered at pre-startup.
+     */
     @Override
     protected void configure()
     {
@@ -143,6 +150,12 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
     }
 
 
+    /**
+     * Converts {@link RabbitConnectionOptions} to Vert.x {@link RabbitMQOptions}.
+     *
+     * @param options The annotation-backed connection options.
+     * @return A configured {@link RabbitMQOptions} instance.
+     */
     public static RabbitMQOptions toOptions(RabbitConnectionOptions options)
     {
         RabbitMQOptions opt = new RabbitMQOptions();

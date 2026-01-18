@@ -6,23 +6,25 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * Declares a queue name and options for a consumer class or a publisher field.
+ */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.TYPE,
-        ElementType.FIELD})
+@Target({ElementType.TYPE, ElementType.FIELD})
 public @interface QueueDefinition
 {
     /**
-     * @return string The name of the queue that this is configuring for
+     * @return The queue name this definition applies to.
      */
     String value();
 
     /**
-     * @return A set of queue options for configuration
+     * @return Queue option overrides for this definition.
      */
     QueueOptions options() default @QueueOptions;
 
     /**
-     * @return The name of the exchange to bind to, defaults to the original name
+     * @return The exchange name to bind to, or {@code default} to use the package exchange.
      */
     String exchange() default "default";
 

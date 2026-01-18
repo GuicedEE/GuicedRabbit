@@ -24,6 +24,10 @@ import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Pre-startup scanner that discovers RabbitMQ annotations and registers
+ * exchanges, queues, publishers, and consumers for later binding.
+ */
 @Log4j2
 public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
 {
@@ -45,6 +49,12 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     @Getter
     private static final Map<String, QueueDefinition> queueConsumerDefinitions = new HashMap<>();
 
+    /**
+     * Returns queue consumer definitions limited to the exchanges mapped to the given package.
+     *
+     * @param packageName The package to filter by.
+     * @return Matching queue definitions keyed by queue name.
+     */
     public static Map<String, QueueDefinition> getQueueConsumerDefinitions(String packageName)
     {
         Map<String, QueueDefinition> packageLimitedQueueDefinitions = new HashMap<>();
@@ -76,6 +86,12 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     @Getter
     private static final Map<String, QueueDefinition> queuePublisherDefinitions = new HashMap<>();
 
+    /**
+     * Returns queue publisher definitions limited to the exchanges mapped to the given package.
+     *
+     * @param packageName The package to filter by.
+     * @return Matching queue definitions keyed by queue name.
+     */
     public static Map<String, QueueDefinition> getQueuePublisherDefinitions(String packageName)
     {
         Map<String, QueueDefinition> packageLimitedQueueDefinitions = new HashMap<>();
@@ -115,6 +131,11 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     private static final Map<String, String> queueRoutingKeys = new HashMap<>();
 
 
+    /**
+     * Scans for RabbitMQ annotations and registers connection and queue metadata.
+     *
+     * @return Futures that complete once scanning has finished.
+     */
     @Override
     public List<Future<Boolean>> onStartup()
     {
@@ -129,6 +150,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }));
     }
 
+    /**
+     * Handles the discovery and registration of client connections and related artifacts.
+     */
     private void processClientConnections(ScanResult scanResult, Set<Class<?>> completedConsumers)
     {
         ClassInfoList clientConnections = scanResult.getClassesWithAnnotation(RabbitConnectionOptions.class);
@@ -150,6 +174,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                 });
     }
 
+    /**
+     * @return {@code true} when the annotated class is associated with a declared Verticle package.
+     */
     private boolean isVerticleBound(ClassInfo clientConnection)
     {
         return VerticleBuilder.getVerticlePackages()
@@ -157,6 +184,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                 .anyMatch(pkg -> clientConnection.getName().startsWith(pkg));
     }
 
+    /**
+     * Processes a single connection annotation and discovers exchanges and queues.
+     */
     private void processClientConnection(ScanResult scanResult, ClassInfo clientConnection, Set<Class<?>> completedConsumers, boolean publishers)
     {
         log.debug("Found Verticle Bound RabbitMQ Connection - {}", clientConnection.getName());
@@ -173,12 +203,22 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }
     }
 
+    /**
+     * Registers connection options for a package if not already present.
+     */
     private void registerPackageConnection(String packageName, RabbitConnectionOptions connectionAnnotation)
     {
         if (!packageRabbitMqConnections.containsKey(packageName))
             packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>()).add(connectionAnnotation);
     }
 
+    /**
+     * Looks up exchange-annotated classes within the connection package.
+     *
+     * @param classInfos       Classes in the package tree.
+     * @param clientConnection The connection annotation source.
+     * @return All exchange declarations in the package.
+     */
     private List<ClassInfo> getExchanges(List<ClassInfo> classInfos, ClassInfo clientConnection)
     {
         var exchanges = classInfos.stream()
@@ -193,6 +233,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         return exchanges;
     }
 
+    /**
+     * Registers a discovered exchange and processes its consumers or publishers.
+     */
     private void processExchange(ClassInfo exchange, Set<Class<?>> completedConsumers, boolean publishers)
     {
         String exchangeName = registerExchange(exchange);
@@ -207,6 +250,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             processExchangePublishers(exchangePackageClasses, exchangeName);
     }
 
+    /**
+     * Registers exchange metadata and returns its name.
+     */
     private String registerExchange(ClassInfo exchange)
     {
         var ex = exchange.loadClass().getAnnotation(QueueExchange.class);
@@ -218,6 +264,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         return exchangeName;
     }
 
+    /**
+     * Discovers and registers consumer classes within an exchange package.
+     */
     private void processExchangeConsumers(List<ClassInfo> exchangePackageClasses, String exchangeName, Set<Class<?>> completedConsumers)
     {
         var queueConsumers = exchangePackageClasses.stream()
@@ -231,6 +280,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }
     }
 
+    /**
+     * Registers a queue consumer class and its routing metadata.
+     */
     private void registerQueueConsumer(ClassInfo consumerClassInfo, String exchangeName, Set<Class<?>> completedConsumers)
     {
         Class<QueueConsumer> consumerClass = (Class<QueueConsumer>) consumerClassInfo.loadClass();
@@ -250,6 +302,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         registerConsumerQueue(queueName, exchangeName, queueDefinition, consumerClass);
     }
 
+    /**
+     * Discovers and registers queue publishers within an exchange package.
+     */
     private void processExchangePublishers(List<ClassInfo> exchangePackageClasses, String exchangeName)
     {
         exchangePackageClasses.stream()
@@ -259,6 +314,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                 .forEach(publisherClassInfo -> registerQueuePublisher(publisherClassInfo, exchangeName));
     }
 
+    /**
+     * Registers a publisher for a queue based on injected fields or class-level annotations.
+     */
     private void registerQueuePublisher(ClassInfo publisherClassInfo, String exchangeName)
     {
         var fields = getPublisherField(publisherClassInfo);
@@ -312,6 +370,11 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }
     }
 
+    /**
+     * Resolves the queue name for a publisher field.
+     *
+     * @return The queue name, or {@code null} if no annotation is present.
+     */
     private String getQueueNameFromField(Field field, ClassInfo publisherClassInfo)
     {
         if (field.isAnnotationPresent(Named.class))
@@ -327,6 +390,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }
     }
 
+    /**
+     * Registers the consumer metadata and routing key, and ensures publisher metadata exists.
+     */
     private void registerConsumerQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, Class<QueueConsumer> aClass)
     {
         queueConsumerDefinitions.put(queueName, queueDefinition);
@@ -342,9 +408,12 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     }
 
     /**
-     * @param queueName
-     * @param queueDefinition
-     * @param override        if it comes from a consumer definition
+     * Registers publisher metadata for the queue, optionally overriding existing values.
+     *
+     * @param queueName       The queue name to register.
+     * @param exchangeName    The exchange used to build the routing key.
+     * @param queueDefinition The queue definition to register.
+     * @param override        Whether to replace existing publisher data.
      */
     private void registerPublisherQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, boolean override)
     {
@@ -364,12 +433,23 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         }
     }
 
+    /**
+     * Ensures this startup step runs early in the lifecycle.
+     *
+     * @return Ordering value for the pre-startup hook.
+     */
     @Override
     public Integer sortOrder()
     {
         return Integer.MIN_VALUE + 80;
     }
 
+    /**
+     * Finds injectable {@link QueuePublisher} fields that are named and not static/final.
+     *
+     * @param aClass The class to inspect.
+     * @return A list of matching fields.
+     */
     private List<Field> getPublisherField(ClassInfo aClass)
     {
         // Load the class once to avoid multiple calls
@@ -398,11 +478,17 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                 .collect(Collectors.toList()); // Collect to the list
     }
 
+    /**
+     * @return {@code true} if the field is final.
+     */
     public static boolean isFinal(Field field)
     {
         return Modifier.isFinal(field.getModifiers());
     }
 
+    /**
+     * @return {@code true} if the field is static.
+     */
     public static boolean isStatic(Field field)
     {
         return Modifier.isStatic(field.getModifiers());

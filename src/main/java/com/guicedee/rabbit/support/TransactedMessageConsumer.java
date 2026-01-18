@@ -10,6 +10,9 @@ import jakarta.transaction.Transactional;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Wrapper that resolves and executes a {@link QueueConsumer} within a transaction.
+ */
 @Getter
 @Setter
 public class TransactedMessageConsumer
@@ -18,6 +21,12 @@ public class TransactedMessageConsumer
     private Class<? extends QueueConsumer> clazz;
     private QueueDefinition queueDefinition;
 
+    /**
+     * Executes the consumer within a transaction, resolving it lazily from Guice.
+     *
+     * @param clazz   The consumer class to execute.
+     * @param message The received RabbitMQ message.
+     */
     @Transactional
     public void execute(Class<? extends QueueConsumer> clazz, RabbitMQMessage message)
     {
