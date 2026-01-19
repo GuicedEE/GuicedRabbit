@@ -215,7 +215,12 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
             opt.setNetworkRecoveryInterval(options.networkRecoveryInterval());
         }
 
-        //opt.setAddresses(Arrays.asList(options.addresses()));
+        if (options.addresses().length > 0)
+        {
+            opt.setAddresses(Arrays.stream(options.addresses())
+                    .map(com.rabbitmq.client.Address::parseAddress)
+                    .collect(java.util.stream.Collectors.toList()));
+        }
         return opt;
     }
 

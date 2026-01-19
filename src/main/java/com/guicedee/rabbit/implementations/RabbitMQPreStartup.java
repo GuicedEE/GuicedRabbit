@@ -192,7 +192,155 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         log.debug("Found Verticle Bound RabbitMQ Connection - {}", clientConnection.getName());
 
         var connectionAnnotation = clientConnection.loadClass().getAnnotation(RabbitConnectionOptions.class);
-        registerPackageConnection(clientConnection.getPackageName(), connectionAnnotation);
+        RabbitConnectionOptions wrappedConnectionOptions = new RabbitConnectionOptions()
+        {
+            @Override
+            public Class<? extends Annotation> annotationType()
+            {
+                return RabbitConnectionOptions.class;
+            }
+
+            @Override
+            public String value()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_CONNECTION_NAME", connectionAnnotation.value());
+            }
+
+            @Override
+            public String uri()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_URI", connectionAnnotation.uri());
+            }
+
+            @Override
+            public String[] addresses()
+            {
+                String addrStr = com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_ADDRESSES", String.join(",", connectionAnnotation.addresses()));
+                return addrStr.isBlank() ? new String[0] : addrStr.split(",");
+            }
+
+            @Override
+            public String user()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_USER", connectionAnnotation.user());
+            }
+
+            @Override
+            public String password()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_PASSWORD", connectionAnnotation.password());
+            }
+
+            @Override
+            public String host()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_HOST", connectionAnnotation.host());
+            }
+
+            @Override
+            public String virtualHost()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_VIRTUAL_HOST", connectionAnnotation.virtualHost());
+            }
+
+            @Override
+            public int port()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_PORT", String.valueOf(connectionAnnotation.port())));
+            }
+
+            @Override
+            public int connectionTimeout()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_CONNECTION_TIMEOUT", String.valueOf(connectionAnnotation.connectionTimeout())));
+            }
+
+            @Override
+            public int requestedHeartbeat()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_REQUESTED_HEARTBEAT", String.valueOf(connectionAnnotation.requestedHeartbeat())));
+            }
+
+            @Override
+            public int handshakeTimeout()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_HANDSHAKE_TIMEOUT", String.valueOf(connectionAnnotation.handshakeTimeout())));
+            }
+
+            @Override
+            public int requestedChannelMax()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_REQUESTED_CHANNEL_MAX", String.valueOf(connectionAnnotation.requestedChannelMax())));
+            }
+
+            @Override
+            public long networkRecoveryInterval()
+            {
+                return Long.parseLong(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_NETWORK_RECOVERY_INTERVAL", String.valueOf(connectionAnnotation.networkRecoveryInterval())));
+            }
+
+            @Override
+            public boolean automaticRecoveryEnabled()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_AUTOMATIC_RECOVERY_ENABLED", String.valueOf(connectionAnnotation.automaticRecoveryEnabled())));
+            }
+
+            @Override
+            public boolean automaticRecoveryOnInitialConnection()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_AUTOMATIC_RECOVERY_ON_INITIAL_CONNECTION", String.valueOf(connectionAnnotation.automaticRecoveryOnInitialConnection())));
+            }
+
+            @Override
+            public boolean includeProperties()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_INCLUDE_PROPERTIES", String.valueOf(connectionAnnotation.includeProperties())));
+            }
+
+            @Override
+            public boolean useNio()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_USE_NIO", String.valueOf(connectionAnnotation.useNio())));
+            }
+
+            @Override
+            public int reconnectAttempts()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_RECONNECT_ATTEMPTS", String.valueOf(connectionAnnotation.reconnectAttempts())));
+            }
+
+            @Override
+            public long reconnectInterval()
+            {
+                return Long.parseLong(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_RECONNECT_INTERVAL", String.valueOf(connectionAnnotation.reconnectInterval())));
+            }
+
+            @Override
+            public String hostnameVerificationAlgorithm()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_HOSTNAME_VERIFICATION_ALGORITHM", connectionAnnotation.hostnameVerificationAlgorithm());
+            }
+
+            @Override
+            public String[] applicationLayerProtocols()
+            {
+                String protocolsStr = com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_APPLICATION_LAYER_PROTOCOLS", String.join(",", connectionAnnotation.applicationLayerProtocols()));
+                return protocolsStr.isBlank() ? new String[0] : protocolsStr.split(",");
+            }
+
+            @Override
+            public boolean registerWriteHandler()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_REGISTER_WRITE_HANDLER", String.valueOf(connectionAnnotation.registerWriteHandler())));
+            }
+
+            @Override
+            public boolean confirmPublishes()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_CONFIRM_PUBLISHES", String.valueOf(connectionAnnotation.confirmPublishes())));
+            }
+        };
+        registerPackageConnection(clientConnection.getPackageName(), wrappedConnectionOptions);
 
         var classInfos = scanResult.getPackageInfo(clientConnection.getPackageName()).getClassInfoRecursive();
         var exchanges = getExchanges(classInfos, clientConnection);
@@ -208,8 +356,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     private void registerPackageConnection(String packageName, RabbitConnectionOptions connectionAnnotation)
     {
-        if (!packageRabbitMqConnections.containsKey(packageName))
-            packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>()).add(connectionAnnotation);
+        packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>()).add(connectionAnnotation);
     }
 
     /**
@@ -256,10 +403,56 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     private String registerExchange(ClassInfo exchange)
     {
         var ex = exchange.loadClass().getAnnotation(QueueExchange.class);
-        String exchangeName = Strings.isNullOrEmpty(ex.value()) ? "default" : ex.value();
+        QueueExchange wrappedExchange = new QueueExchange()
+        {
+            @Override
+            public Class<? extends Annotation> annotationType()
+            {
+                return QueueExchange.class;
+            }
+
+            @Override
+            public String value()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_EXCHANGE_NAME", ex.value());
+            }
+
+            @Override
+            public boolean createDeadLetter()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_EXCHANGE_CREATE_DEAD_LETTER", String.valueOf(ex.createDeadLetter())));
+            }
+
+            @Override
+            public boolean durable()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_EXCHANGE_DURABLE", String.valueOf(ex.durable())));
+            }
+
+            @Override
+            public boolean autoDelete()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_EXCHANGE_AUTO_DELETE", String.valueOf(ex.autoDelete())));
+            }
+
+            @Override
+            public ExchangeType exchangeType()
+            {
+                String typeStr = com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_EXCHANGE_TYPE", ex.exchangeType().name());
+                try
+                {
+                    return ExchangeType.valueOf(typeStr);
+                }
+                catch (IllegalArgumentException e)
+                {
+                    return ex.exchangeType();
+                }
+            }
+        };
+        String exchangeName = Strings.isNullOrEmpty(wrappedExchange.value()) ? "default" : wrappedExchange.value();
 
         packageExchanges.put(exchange.getPackageName(), exchangeName);
-        exchangeDefinitions.put(exchangeName, ex);
+        exchangeDefinitions.put(exchangeName, wrappedExchange);
 
         return exchangeName;
     }
@@ -294,12 +487,13 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         completedConsumers.add(consumerClass);
 
         var queueDefinition = consumerClass.getAnnotation(QueueDefinition.class);
-        String queueName = queueDefinition.value();
+        QueueDefinition wrappedQueueDefinition = wrapQueueDefinition(queueDefinition);
+        String queueName = wrappedQueueDefinition.value();
 
         if (!queueExchangeNames.containsKey(queueName))
             queueExchangeNames.put(queueName, exchangeName);
 
-        registerConsumerQueue(queueName, exchangeName, queueDefinition, consumerClass);
+        registerConsumerQueue(queueName, exchangeName, wrappedQueueDefinition, consumerClass);
     }
 
     /**
@@ -327,27 +521,29 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             {
                 String publisherExchange = queueExchangeNames.getOrDefault(queueName, exchangeName);
                 var queueDefinition = field.getAnnotation(QueueDefinition.class);
+                QueueDefinition wrappedQueueDefinition = null;
                 if (queueDefinition != null && !queueDefinition.exchange().equals("default"))
                 {
                     publisherExchange = queueDefinition.exchange();
+                    wrappedQueueDefinition = wrapQueueDefinition(queueDefinition);
                 } else
                 {
                     publisherExchange = exchangeName;
                     if (queueDefinition == null)
                     {
                         String finalPublisherExchange = publisherExchange;
-                        queueDefinition = new QueueDefinition()
+                        wrappedQueueDefinition = new QueueDefinition()
                         {
                             @Override
                             public Class<? extends Annotation> annotationType()
                             {
-                                return QueueExchange.class;
+                                return QueueDefinition.class;
                             }
 
                             @Override
                             public String value()
                             {
-                                return queueName;
+                                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_NAME", queueName);
                             }
 
                             @Override
@@ -359,15 +555,161 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                             @Override
                             public String exchange()
                             {
-                                return finalPublisherExchange;
+                                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_EXCHANGE", finalPublisherExchange);
                             }
                         };
                     }
+                    else
+                    {
+                        wrappedQueueDefinition = wrapQueueDefinition(queueDefinition);
+                    }
                 }
-                registerPublisherQueue(queueName, exchangeName, queueDefinition, false);
+                registerPublisherQueue(queueName, exchangeName, wrappedQueueDefinition, false);
                 log.debug("Found Queue Publisher - {} - {} - {}", queueName, publisherExchange, queueRoutingKeys.get(queueName));
             }
         }
+    }
+
+    private QueueDefinition wrapQueueDefinition(QueueDefinition queueDefinition)
+    {
+        if (queueDefinition == null)
+            return null;
+        return new QueueDefinition()
+        {
+            @Override
+            public Class<? extends Annotation> annotationType()
+            {
+                return QueueDefinition.class;
+            }
+
+            @Override
+            public String value()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_NAME", queueDefinition.value());
+            }
+
+            @Override
+            public QueueOptions options()
+            {
+                return wrapQueueOptions(queueDefinition.options());
+            }
+
+            @Override
+            public String exchange()
+            {
+                return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_EXCHANGE", queueDefinition.exchange());
+            }
+        };
+    }
+
+    private QueueOptions wrapQueueOptions(QueueOptions options)
+    {
+        if (options == null)
+            return null;
+        return new QueueOptions()
+        {
+            @Override
+            public Class<? extends Annotation> annotationType()
+            {
+                return QueueOptions.class;
+            }
+
+            @Override
+            public int priority()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_PRIORITY", String.valueOf(options.priority())));
+            }
+
+            @Override
+            public int fetchCount()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_FETCH_COUNT", String.valueOf(options.fetchCount())));
+            }
+
+            @Override
+            public boolean durable()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_DURABLE", String.valueOf(options.durable())));
+            }
+
+            @Override
+            public boolean delete()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_DELETE", String.valueOf(options.delete())));
+            }
+
+            @Override
+            public boolean autoAck()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_AUTO_ACK", String.valueOf(options.autoAck())));
+            }
+
+            @Override
+            public boolean consumerExclusive()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_CONSUMER_EXCLUSIVE", String.valueOf(options.consumerExclusive())));
+            }
+
+            @Override
+            public boolean singleConsumer()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_SINGLE_CONSUMER", String.valueOf(options.singleConsumer())));
+            }
+
+            @Override
+            public int ttl()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_TTL", String.valueOf(options.ttl())));
+            }
+
+            @Override
+            public boolean noLocal()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_NO_LOCAL", String.valueOf(options.noLocal())));
+            }
+
+            @Override
+            public boolean keepMostRecent()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_KEEP_MOST_RECENT", String.valueOf(options.keepMostRecent())));
+            }
+
+            @Override
+            public int maxInternalQueueSize()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_MAX_INTERNAL_SIZE", String.valueOf(options.maxInternalQueueSize())));
+            }
+
+            @Override
+            public boolean transacted()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_TRANSACTED", String.valueOf(options.transacted())));
+            }
+
+            @Override
+            public boolean autobind()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_AUTOBIND", String.valueOf(options.autobind())));
+            }
+
+            @Override
+            public int consumerCount()
+            {
+                return Integer.parseInt(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_CONSUMER_COUNT", String.valueOf(options.consumerCount())));
+            }
+
+            @Override
+            public boolean dedicatedChannel()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_DEDICATED_CHANNEL", String.valueOf(options.dedicatedChannel())));
+            }
+
+            @Override
+            public boolean dedicatedConnection()
+            {
+                return Boolean.parseBoolean(com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_QUEUE_DEDICATED_CONNECTION", String.valueOf(options.dedicatedConnection())));
+            }
+        };
     }
 
     /**
@@ -395,16 +737,17 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     private void registerConsumerQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, Class<QueueConsumer> aClass)
     {
-        queueConsumerDefinitions.put(queueName, queueDefinition);
+        QueueDefinition wrapped = wrapQueueDefinition(queueDefinition);
+        queueConsumerDefinitions.put(queueName, wrapped);
         queueConsumerClass.put(queueName, aClass);
         queueConsumerKeys.put(queueName, Key.get(aClass, Names.named(queueName)));
 
-        String routingKey = exchangeName + "_" + queueDefinition.value();
+        String routingKey = exchangeName + "_" + wrapped.value();
         queueRoutingKeys.put(queueName, routingKey);
 
         log.debug("Found Queue Consumer - {} - {} - {}", queueName, exchangeName, routingKey);
 
-        registerPublisherQueue(queueName, exchangeName, queueDefinition, true);
+        registerPublisherQueue(queueName, exchangeName, wrapped, true);
     }
 
     /**
@@ -417,14 +760,15 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     private void registerPublisherQueue(String queueName, String exchangeName, QueueDefinition queueDefinition, boolean override)
     {
+        QueueDefinition wrapped = wrapQueueDefinition(queueDefinition);
         if (!queuePublisherDefinitions.containsKey(queueName) || override)
         {
-            queuePublisherDefinitions.put(queueName, queueDefinition);
+            queuePublisherDefinitions.put(queueName, wrapped);
             queuePublisherKeys.put(queueName, Key.get(QueuePublisher.class, Names.named(queueName)));
         }
         if (!queueRoutingKeys.containsKey(queueName) || override)
         {
-            String routingKey = exchangeName + "_" + queueDefinition.value();
+            String routingKey = exchangeName + "_" + wrapped.value();
             queueRoutingKeys.put(queueName, routingKey);
         }
         if (!queueExchangeNames.containsKey(queueName))
