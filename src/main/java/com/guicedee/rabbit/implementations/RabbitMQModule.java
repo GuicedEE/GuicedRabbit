@@ -11,7 +11,6 @@ import com.guicedee.client.services.lifecycle.IGuiceModule;
 import com.guicedee.rabbit.QueueConsumer;
 import com.guicedee.rabbit.QueuePublisher;
 import com.guicedee.rabbit.RabbitConnectionOptions;
-import com.guicedee.rabbit.support.TransactedMessageConsumer;
 import com.guicedee.vertx.spi.VertXPreStartup;
 import io.vertx.core.Future;
 import io.vertx.rabbitmq.RabbitMQClient;
@@ -81,9 +80,6 @@ public class RabbitMQModule extends AbstractModule implements IGuiceModule<Rabbi
                     .to(clazz);
             bind(Key.get(QueueConsumer.class, Names.named(queueConsumerDefinition.value())))
                     .to(clazz);
-            bind(Key.get(TransactedMessageConsumer.class, Names.named(queueName))).toProvider(() -> {
-                return IGuiceContext.get(TransactedMessageConsumer.class);
-            }).in(Singleton.class);
             //.toProvider(()-> IGuiceContext.get(Key.get(clazzy,Names.named(queueConsumerDefinition.value())))).in(Singleton.class);
         });
 
