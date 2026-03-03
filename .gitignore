@@ -126,3 +126,4 @@ fabric.properties
 /.vscode/settings.json
 *.iml
 logs/*
+/logs/
