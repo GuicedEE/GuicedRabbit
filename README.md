@@ -1,6 +1,6 @@
 # GuicedEE RabbitMQ
 
-[![Build](https://github.com/GuicedEE/RabbitMQ/actions/workflows/build.yml/badge.svg)](https://github.com/GuicedEE/RabbitMQ/actions/workflows/build.yml)
+[![Build](https://github.com/GuicedEE/GuicedRabbit/actions/workflows/build.yml/badge.svg)](https://github.com/GuicedEE/RabbitMQ/actions/workflows/build.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.guicedee/rabbitmq)](https://central.sonatype.com/artifact/com.guicedee/rabbitmq)
 [![Maven Snapshot](https://img.shields.io/nexus/s/com.guicedee/rabbitmq?server=https%3A%2F%2Foss.sonatype.org&label=Maven%20Snapshot)](https://oss.sonatype.org/content/repositories/snapshots/com/guicedee/rabbitmq/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](https://www.apache.org/licenses/LICENSE-2.0)

@@ -15,10 +15,12 @@
 
     <name>Guiced Rabbit</name>
     <description>Provides a convenient means to use RabbitMQ</description>
+    <url>https://github.com/GuicedEE/GuicedRabbit</url>
 
     <properties>
         <ignore.moditect>true</ignore.moditect>
         <flatten.pom>false</flatten.pom>
+        <project.scm.nameUrl>/GuicedEE/GuicedRabbit</project.scm.nameUrl>
     </properties>
 
     <dependencies>
