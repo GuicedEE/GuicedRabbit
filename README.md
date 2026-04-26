@@ -2,7 +2,7 @@
 
 [![Build](https://github.com/GuicedEE/GuicedRabbit/actions/workflows/build.yml/badge.svg)](https://github.com/GuicedEE/RabbitMQ/actions/workflows/build.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.guicedee/rabbitmq)](https://central.sonatype.com/artifact/com.guicedee/rabbitmq)
-[![Maven Snapshot](https://img.shields.io/nexus/s/com.guicedee/rabbitmq?server=https%3A%2F%2Foss.sonatype.org&label=Maven%20Snapshot)](https://oss.sonatype.org/content/repositories/snapshots/com/guicedee/rabbitmq/)
+[![Snapshot](https://img.shields.io/badge/Snapshot-2.0.0-SNAPSHOT-orange)](https://github.com/GuicedEE/Packages/packages/maven/com.guicedee.rabbitmq)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](https://www.apache.org/licenses/LICENSE-2.0)
 
 ![Java 25+](https://img.shields.io/badge/Java-25%2B-green)
@@ -120,28 +120,49 @@ That's it. `RabbitMQPreStartup` discovers the annotations, `RabbitMQModule` crea
 
 ## 📐 Architecture
 
-```
-Startup
-  IGuiceContext.instance()
-   └─ RabbitMQPreStartup              (IGuicePreStartup — annotation scanning)
-       ├─ Discovers @RabbitConnectionOptions classes
-       ├─ Discovers @QueueExchange classes per package
-       ├─ Discovers @QueueDefinition consumer classes
-       ├─ Discovers @QueueDefinition/@QueuePublisher fields
-       └─ Registers metadata for binding
-   └─ RabbitMQModule                  (IGuiceModule — Guice bindings)
-       ├─ Creates RabbitMQClient per connection (via Vert.x)
-       ├─ Binds RabbitMQClient as @Named("connection-name")
-       ├─ Binds QueueConsumer implementations as singletons
-       ├─ Binds QueuePublisher instances as @Named("queue-name")
-       └─ Binds RabbitMQClient as @Named("connection-name")
-   └─ RabbitPostStartup               (IGuicePostStartup — runtime initialization)
-       ├─ Starts RabbitMQ client connections
-       ├─ Declares exchanges (with optional DLX)
-       ├─ Declares queues with options (priority, TTL, etc.)
-       ├─ Binds queues to exchanges with routing keys
-       ├─ Enables publisher confirms if configured
-       └─ Starts consumer listeners
+```mermaid
+flowchart TD
+    n1["Startup"]
+    n2["IGuiceContext.instance()"]
+    n1 --> n2
+    n3["RabbitMQPreStartup<br/>IGuicePreStartup — annotation scanning"]
+    n2 --> n3
+    n4["Discovers @RabbitConnectionOptions classes"]
+    n3 --> n4
+    n5["Discovers @QueueExchange classes per package"]
+    n3 --> n5
+    n6["Discovers @QueueDefinition consumer classes"]
+    n3 --> n6
+    n7["Discovers @QueueDefinition/@QueuePublisher fields"]
+    n3 --> n7
+    n8["Registers metadata for binding"]
+    n3 --> n8
+    n9["RabbitMQModule<br/>IGuiceModule — Guice bindings"]
+    n2 --> n9
+    n10["Creates RabbitMQClient per connection<br/>via Vert.x"]
+    n9 --> n10
+    n11["Binds RabbitMQClient as @Named('connection-name')"]
+    n9 --> n11
+    n12["Binds QueueConsumer implementations as singletons"]
+    n9 --> n12
+    n13["Binds QueuePublisher instances as @Named('queue-name')"]
+    n9 --> n13
+    n14["Binds RabbitMQClient as @Named('connection-name')"]
+    n9 --> n14
+    n15["RabbitPostStartup<br/>IGuicePostStartup — runtime initialization"]
+    n2 --> n15
+    n16["Starts RabbitMQ client connections"]
+    n15 --> n16
+    n17["Declares exchanges<br/>with optional DLX"]
+    n15 --> n17
+    n18["Declares queues with options<br/>priority, TTL, etc."]
+    n15 --> n18
+    n19["Binds queues to exchanges with routing keys"]
+    n15 --> n19
+    n20["Enables publisher confirms if configured"]
+    n15 --> n20
+    n21["Starts consumer listeners"]
+    n15 --> n21
 ```
 
 ### Message lifecycle
@@ -426,14 +447,15 @@ private RabbitMQClient client;
 
 ## 🗺️ Module Graph
 
-```
-com.guicedee.rabbit
- ├── io.vertx.rabbitmq            (Vert.x RabbitMQ client)
- ├── com.rabbitmq.client          (AMQP Java client)
- ├── com.guicedee.vertx           (Vert.x lifecycle)
- ├── com.guicedee.client          (GuicedEE SPI contracts)
- ├── io.github.classgraph         (annotation scanning)
- └── org.apache.commons.lang3     (StringUtils)
+```mermaid
+flowchart LR
+    com_guicedee_rabbit["com.guicedee.rabbit"]
+    com_guicedee_rabbit --> io_vertx_rabbitmq["io.vertx.rabbitmq<br/>Vert.x RabbitMQ client"]
+    com_guicedee_rabbit --> com_rabbitmq_client["com.rabbitmq.client<br/>AMQP Java client"]
+    com_guicedee_rabbit --> com_guicedee_vertx["com.guicedee.vertx<br/>Vert.x lifecycle"]
+    com_guicedee_rabbit --> com_guicedee_client["com.guicedee.client<br/>GuicedEE SPI contracts"]
+    com_guicedee_rabbit --> io_github_classgraph["io.github.classgraph<br/>annotation scanning"]
+    com_guicedee_rabbit --> org_apache_commons_lang3["org.apache.commons.lang3<br/>StringUtils"]
 ```
 
 ## 🧩 JPMS
