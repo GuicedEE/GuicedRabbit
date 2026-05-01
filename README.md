@@ -2,13 +2,11 @@
 
 [![Build](https://github.com/GuicedEE/GuicedRabbit/actions/workflows/build.yml/badge.svg)](https://github.com/GuicedEE/RabbitMQ/actions/workflows/build.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/com.guicedee/rabbitmq)](https://central.sonatype.com/artifact/com.guicedee/rabbitmq)
-[![Snapshot](https://img.shields.io/badge/Snapshot-2.0.1-SNAPSHOT-SNAPSHOT-orange)](https://github.com/GuicedEE/Packages/packages/maven/com.guicedee.rabbitmq)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](https://www.apache.org/licenses/LICENSE-2.0)
 
 ![Java 25+](https://img.shields.io/badge/Java-25%2B-green)
 ![Guice 7](https://img.shields.io/badge/Guice-7%2B-green)
 ![Vert.X 5](https://img.shields.io/badge/Vert.x-5%2B-green)
-![Maven 4](https://img.shields.io/badge/Maven-4%2B-green)
 
 **Annotation-driven RabbitMQ** integration for the [GuicedEE](https://github.com/GuicedEE) / Vert.x stack.
 Declare connections, exchanges, queues, consumers, and publishers with annotations — everything is discovered at startup via ClassGraph, wired through Guice, and managed by the Vert.x RabbitMQ client.
