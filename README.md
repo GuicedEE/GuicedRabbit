@@ -26,7 +26,7 @@ Built on [Vert.x RabbitMQ Client](https://vertx.io/docs/vertx-rabbitmq-client/ja
 <summary>Gradle (Kotlin DSL)</summary>
 
 ```kotlin
-implementation("com.guicedee:rabbitmq:2.0.1-SNAPSHOT")
+implementation("com.guicedee:rabbitmq:2.0.1")
 ```
 </details>
 
