@@ -1,6 +1,6 @@
 package com.guicedee.rabbit;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import tools.jackson.databind.annotation.JsonSerialize;
 import com.rabbitmq.client.AMQP;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.rabbitmq.RabbitMQClient;

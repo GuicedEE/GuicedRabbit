@@ -22,8 +22,8 @@ module com.guicedee.rabbit {
     provides IGuiceModule with RabbitMQModule;
     provides IGuicePreStartup with RabbitMQPreStartup;
 
-    opens com.guicedee.rabbit to com.google.guice,com.fasterxml.jackson.databind;
-    opens com.guicedee.rabbit.implementations.def to com.google.guice,com.fasterxml.jackson.databind;
+    opens com.guicedee.rabbit to com.google.guice,tools.jackson.databind;
+    opens com.guicedee.rabbit.implementations.def to com.google.guice,tools.jackson.databind;
     exports com.guicedee.rabbit.implementations;
-    opens com.guicedee.rabbit.implementations to com.fasterxml.jackson.databind, com.google.guice;
+    opens com.guicedee.rabbit.implementations to tools.jackson.databind, com.google.guice;
 }
