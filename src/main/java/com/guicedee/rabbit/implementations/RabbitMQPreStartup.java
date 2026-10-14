@@ -1,5 +1,7 @@
 package com.guicedee.rabbit.implementations;
 
+import com.guicedee.client.utils.ClassLoading;
+
 import com.google.common.base.Strings;
 import com.google.inject.Key;
 import com.google.inject.name.Names;
@@ -171,7 +173,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     {
         log.debug("Found RabbitMQ Connection - {}", clientConnection.getName());
 
-        var connectionAnnotation = clientConnection.loadClass().getAnnotation(RabbitConnectionOptions.class);
+        var connectionAnnotation = ClassLoading.loadClass(clientConnection).getAnnotation(RabbitConnectionOptions.class);
         String connectionName = connectionAnnotation.value();
         RabbitConnectionOptions wrappedConnectionOptions = new RabbitConnectionOptions()
         {
@@ -383,7 +385,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     private String registerExchange(ClassInfo exchange)
     {
-        var ex = exchange.loadClass().getAnnotation(QueueExchange.class);
+        var ex = ClassLoading.loadClass(exchange).getAnnotation(QueueExchange.class);
         String rawExchangeName = ex.value();
         QueueExchange wrappedExchange = new QueueExchange()
         {
@@ -460,7 +462,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     private void registerQueueConsumer(ClassInfo consumerClassInfo, String exchangeName, Set<Class<?>> completedConsumers)
     {
-        Class<QueueConsumer> consumerClass = (Class<QueueConsumer>) consumerClassInfo.loadClass();
+        Class<QueueConsumer> consumerClass = (Class<QueueConsumer>) ClassLoading.loadClass(consumerClassInfo);
 
         if (completedConsumers.contains(consumerClass))
         {
@@ -710,7 +712,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             return field.getAnnotation(com.google.inject.name.Named.class).value();
         } else
         {
-            var queueDefinition = publisherClassInfo.loadClass().getAnnotation(QueueDefinition.class);
+            var queueDefinition = ClassLoading.loadClass(publisherClassInfo).getAnnotation(QueueDefinition.class);
             return queueDefinition != null ? queueDefinition.value() : null;
         }
     }
@@ -780,7 +782,7 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
     private List<Field> getPublisherField(ClassInfo aClass)
     {
         // Load the class once to avoid multiple calls
-        Class<?> clazz = aClass.loadClass();
+        Class<?> clazz = ClassLoading.loadClass(aClass);
         return Arrays.stream(clazz.getDeclaredFields())  // Stream the declared fields
                 .filter(field -> !isFinal(field) && !isStatic(field)) // Filter out final and static fields
                 .filter(field -> {
