@@ -4,6 +4,7 @@ import com.guicedee.client.services.lifecycle.IGuicePreStartup;
 import com.guicedee.rabbit.implementations.*;
 
 module com.guicedee.rabbit {
+    requires com.guicedee.jsonrepresentation;
     uses com.guicedee.rabbit.implementations.def.OnQueueExchangeDeclared;
     exports com.guicedee.rabbit;
     exports com.guicedee.rabbit.implementations.def;
