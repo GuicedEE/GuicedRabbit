@@ -339,7 +339,11 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     private void registerPackageConnection(String packageName, RabbitConnectionOptions connectionAnnotation)
     {
-        packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>()).add(connectionAnnotation);
+        var connections = packageRabbitMqConnections.computeIfAbsent(packageName, k -> new ArrayList<>());
+        // Consumer and publisher discovery both visit the connection; bind and start it only once.
+        if (connections.stream().noneMatch(existing -> existing.value().equals(connectionAnnotation.value()))) {
+            connections.add(connectionAnnotation);
+        }
     }
 
     /**
