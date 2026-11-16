@@ -174,8 +174,22 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
         log.debug("Found RabbitMQ Connection - {}", clientConnection.getName());
 
         var connectionAnnotation = ClassLoading.loadClass(clientConnection).getAnnotation(RabbitConnectionOptions.class);
+        RabbitConnectionOptions wrappedConnectionOptions = wrapConnectionOptions(connectionAnnotation);
+        registerPackageConnection(clientConnection.getPackageName(), wrappedConnectionOptions);
+
+        var classInfos = scanResult.getPackageInfo(clientConnection.getPackageName()).getClassInfoRecursive();
+        var exchanges = getExchanges(classInfos, clientConnection);
+
+        for (ClassInfo exchange : exchanges)
+        {
+            processExchange(exchange, completedConsumers, publishers);
+        }
+    }
+
+    private RabbitConnectionOptions wrapConnectionOptions(RabbitConnectionOptions connectionAnnotation)
+    {
         String connectionName = connectionAnnotation.value();
-        RabbitConnectionOptions wrappedConnectionOptions = new RabbitConnectionOptions()
+        return new RabbitConnectionOptions()
         {
             @Override
             public Class<? extends Annotation> annotationType()
@@ -198,7 +212,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             @Override
             public String[] addresses()
             {
-                String addrStr = envForName(connectionName, "ADDRESSES", String.join(",", connectionAnnotation.addresses()));
+                String addrStr = com.guicedee.client.Environment.getSystemPropertyOrEnvironment(
+                        java.util.List.of("RABBITMQ_" + connectionName.toUpperCase(java.util.Locale.ROOT).replace('-', '_').replace('.', '_') + "_ADDRESSES",
+                                "RABBITMQ_ADDRESSES"), ",", connectionAnnotation.addresses());
                 return addrStr.isBlank() ? new String[0] : addrStr.split(",");
             }
 
@@ -307,7 +323,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             @Override
             public String[] applicationLayerProtocols()
             {
-                String protocolsStr = envForName(connectionName, "APPLICATION_LAYER_PROTOCOLS", String.join(",", connectionAnnotation.applicationLayerProtocols()));
+                String protocolsStr = com.guicedee.client.Environment.getSystemPropertyOrEnvironment(
+                        java.util.List.of("RABBITMQ_" + connectionName.toUpperCase(java.util.Locale.ROOT).replace('-', '_').replace('.', '_') + "_APPLICATION_LAYER_PROTOCOLS",
+                                "RABBITMQ_APPLICATION_LAYER_PROTOCOLS"), ",", connectionAnnotation.applicationLayerProtocols());
                 return protocolsStr.isBlank() ? new String[0] : protocolsStr.split(",");
             }
 
@@ -323,15 +341,6 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                 return Boolean.parseBoolean(envForName(connectionName, "CONFIRM_PUBLISHES", String.valueOf(connectionAnnotation.confirmPublishes())));
             }
         };
-        registerPackageConnection(clientConnection.getPackageName(), wrappedConnectionOptions);
-
-        var classInfos = scanResult.getPackageInfo(clientConnection.getPackageName()).getClassInfoRecursive();
-        var exchanges = getExchanges(classInfos, clientConnection);
-
-        for (ClassInfo exchange : exchanges)
-        {
-            processExchange(exchange, completedConsumers, publishers);
-        }
     }
 
     /**
@@ -508,12 +517,12 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
             if (!queuePublisherDefinitions.containsKey(queueName))
             {
                 String publisherExchange = queueExchangeNames.getOrDefault(queueName, exchangeName);
-                var queueDefinition = field.getAnnotation(QueueDefinition.class);
+                var queueDefinition = wrapQueueDefinition(field.getAnnotation(QueueDefinition.class));
                 QueueDefinition wrappedQueueDefinition = null;
                 if (queueDefinition != null && !queueDefinition.exchange().equals("default"))
                 {
                     publisherExchange = queueDefinition.exchange();
-                    wrappedQueueDefinition = wrapQueueDefinition(queueDefinition);
+                    wrappedQueueDefinition = queueDefinition;
                 } else
                 {
                     publisherExchange = exchangeName;
@@ -549,10 +558,10 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
                     }
                     else
                     {
-                        wrappedQueueDefinition = wrapQueueDefinition(queueDefinition);
+                        wrappedQueueDefinition = queueDefinition;
                     }
                 }
-                registerPublisherQueue(queueName, exchangeName, wrappedQueueDefinition, false);
+                registerPublisherQueue(queueName, publisherExchange, wrappedQueueDefinition, false);
                 log.debug("Found Queue Publisher - {} - {} - {}", queueName, publisherExchange, queueRoutingKeys.get(queueName));
             }
         }
@@ -845,16 +854,9 @@ public class RabbitMQPreStartup implements IGuicePreStartup<RabbitMQPreStartup>
      */
     static String envForName(String name, String property, String defaultValue)
     {
-        String normalizedName = name.toUpperCase().replace('-', '_').replace('.', '_');
-        // Try name-specific first: RABBITMQ_{NAME}_{PROPERTY}
-        String scopedKey = "RABBITMQ_" + normalizedName + "_" + property;
-        String scopedValue = com.guicedee.client.Environment.getSystemPropertyOrEnvironment(scopedKey, null);
-        if (scopedValue != null && !scopedValue.isBlank())
-        {
-            return scopedValue;
-        }
-        // Fall back to global: RABBITMQ_{PROPERTY}
-        return com.guicedee.client.Environment.getSystemPropertyOrEnvironment("RABBITMQ_" + property, defaultValue);
+        String normalizedName = name.toUpperCase(java.util.Locale.ROOT).replace('-', '_').replace('.', '_');
+        return com.guicedee.client.Environment.getSystemPropertyOrEnvironment(
+                java.util.List.of("RABBITMQ_" + normalizedName + "_" + property, "RABBITMQ_" + property), defaultValue);
     }
 
 }
